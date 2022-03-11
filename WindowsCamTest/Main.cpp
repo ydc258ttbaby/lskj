@@ -15,6 +15,7 @@
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 #include "LogWindows.h"
 #include "implot-master/implot.h"
+#include "CellDetect.h"
 
 //#define STB_IMAGE_IMPLEMENTATION
 #include "stbimage/stb_image.h"
@@ -54,7 +55,7 @@ unsigned int g_camera_num = 0;
 std::mutex camera_num_mutex;
 
 
-std::string g_filepath = "D:\\ydc";
+std::string g_filepath = "E:\\ydc1";
 std::string g_imagepath = "";
 
 bool g_bSave = false;
@@ -64,16 +65,22 @@ int g_max_count_per_second = 0;
 int g_last_count_per_second = 0;
 int g_captured_img = 0;
 std::vector<int> img_per_second_list;
+std::vector<int> cell_per_second_list;
+std::vector<int> cell_total_list;
+int cell_total;
 int img_per_second_avg = 0;
+int cell_per_second_avg = 0;
 std::vector<int> second_list;
 void SaveImageAsync(NativeCamera* inCamera) {
     int count = 0;
     std::string old_time_str;
     int count_in_second = 1;
+    int cell_in_second = 1;
     struct tm timeInfo;
     time_t rawTime;
     int second = 0;
     while (true) {
+        int cellNum = 0;
         if (g_bPreview) {
             if (g_bSave && std::filesystem::is_directory(g_filepath)) {
                 time(&rawTime);
@@ -85,9 +92,13 @@ void SaveImageAsync(NativeCamera* inCamera) {
                     if (count_in_second > g_max_count_per_second) {
                         g_max_count_per_second = count_in_second;
                     }
+                    cell_total += cell_in_second;
                     img_per_second_list.push_back(count_in_second);
+                    cell_per_second_list.push_back(cell_in_second);
+                    cell_total_list.push_back(cell_total);
                     second_list.push_back(second++);
                     count_in_second = 1;
+                    cell_in_second = 1;
                 }
                 old_time_str = std::string(buffer);
                 char count_str[6];
@@ -95,10 +106,12 @@ void SaveImageAsync(NativeCamera* inCamera) {
                 std::string res = old_time_str + std::string(count_str) + ".bmp";
                 std::filesystem::path imagePath = std::filesystem::path(g_filepath);
                 imagePath /= std::filesystem::path(res);
-                if (inCamera->GetFrame(true, g_bAsyncSave, imagePath.string())) {
+                cellNum = inCamera->GetFrame(true, g_bAsyncSave, imagePath.string());
+                if (cellNum > 0) {
                     count++;
                     g_captured_img = count;
                     count_in_second++;
+                    cell_in_second += cellNum;
                 }
             }
             else {
@@ -260,12 +273,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     int volume_array[5] = {10,20,30,50,100};
     int volume_current = 0;
     bool b_save = false;
-    bool b_preview = false;
+    bool b_preview = true;
     enum Speed_Element { Element_1, Element_2, Element_3, Element_COUNT };
     int speed_array[3] = {10,20,30};
     int speed_current_elem = Element_1;
     char img_width_cstr[128] = "320";
-    char img_offset_x_cstr[128] = "160";
+    char img_offset_x_cstr[128] = "40";
     char img_height_cstr[128] = "480";
     char img_exposure_cstr[128] = "170";
     char img_acquisition_frame_rate_cstr[128] = "2000";
@@ -297,7 +310,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // load image
 
     int my_image_width = 320;
-    int my_image_offset_x = 160;
+    int my_image_offset_x = 40;
     int my_image_height = 480;
     int my_image_exposure_time = 170;
     int my_image_acquisition_frame_rate = 2000;
@@ -333,8 +346,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // mkdir g_filepath
     if (!std::filesystem::exists(std::filesystem::path(g_filepath))) {
-        std::filesystem::create_directories(std::filesystem::path(g_filepath));
-        g_LogWindow->AddLog("create path %s \n",g_filepath);
+        //std::filesystem::create_directories(std::filesystem::path(g_filepath));
+        //g_LogWindow->AddLog("create path %s \n",g_filepath);
     }
 
     // Main loop
@@ -460,8 +473,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 }
             }
             ImGui::Separator();
+            
             if (ImGui::Button("Start")) {
                 m_pShowUI->CollectStart(std::get<1>(info_v[Item_tv]), std::get<1>(info_v[Item_s]), 0, std::get<1>(info_v[Item_py]), std::get<1>(info_v[Item_px]));
+                //img_per_second_list.clear();
                 //m_pShowUI->CollectStart(10, 10, 0, 5, 8);
             }
             // in and out
@@ -476,6 +491,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             if (ImGui::Button("Open Path")) {
                 ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", nullptr, ".");
             }
+            /*if (ImGui::Button("Clear data")) {
+
+                cell_per_second_list = std::vector<int>();
+                cell_per_second_avg = 0;
+                cell_total_list = std::vector<int>();
+            }*/
             // display
             if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
             {
@@ -606,13 +627,30 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             int bar_data[11] = {1,2,3,4,5,6,7,8,9,10,11};
             img_per_second_avg = average(img_per_second_list);
             std::vector<int> img_per_second_avg_list(second_list.size(),img_per_second_avg);
-            if (ImPlot::BeginPlot("My Plot")) {
+            //if (ImPlot::BeginPlot("My Plot")) {
+            //    //ImPlot::PlotBars("img per second", img_per_second_list.data(), img_per_second_list.size());
+            //    //ImPlot::PlotScatter("Data 1", bar_data, bar_data, 11);
+            //    ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+
+            //    ImPlot::PlotLine("img per second", second_list.data(), img_per_second_list.data(), second_list.size());
+            //    ImPlot::PlotLine("avg", second_list.data(), img_per_second_avg_list.data(), second_list.size());
+            //    ImPlot::EndPlot();
+            //}
+            cell_per_second_avg = average(cell_per_second_list);
+            if (ImPlot::BeginPlot("Cell Per Second")) {
                 //ImPlot::PlotBars("img per second", img_per_second_list.data(), img_per_second_list.size());
                 //ImPlot::PlotScatter("Data 1", bar_data, bar_data, 11);
                 ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
 
-                ImPlot::PlotLine("img per second", second_list.data(), img_per_second_list.data(), second_list.size());
+                ImPlot::PlotLine("cell per second", second_list.data(), cell_per_second_list.data(), second_list.size());
                 ImPlot::PlotLine("avg", second_list.data(), img_per_second_avg_list.data(), second_list.size());
+                ImPlot::EndPlot();
+            }
+            if (ImPlot::BeginPlot("Cell Total")) {
+                //ImPlot::PlotBars("img per second", img_per_second_list.data(), img_per_second_list.size());
+                //ImPlot::PlotScatter("Data 1", bar_data, bar_data, 11);
+                ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                ImPlot::PlotLine("img per second", second_list.data(), cell_total_list.data(), second_list.size());
                 ImPlot::EndPlot();
             }
             ImGui::End();

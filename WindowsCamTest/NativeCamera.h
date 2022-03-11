@@ -8,6 +8,9 @@
 #include <chrono>
 #include <stdlib.h>
 #include "LogWindows.h"
+#include "CellDetect.h"
+using namespace cv;
+
 using namespace std::literals;
 typedef std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<long long int, std::ratio<1, 1000000000>>> std_time;
 typedef std::unordered_map<int, double> CameraParameters;
@@ -18,13 +21,14 @@ public:
 	~NativeCamera();
 	bool Init();
 	uint32_t GetDeviceNum();
-	bool GetFrame(bool bSave,bool bSaveAsync,const std::string inSavePath);
+	int GetFrame(bool bSave,bool bSaveAsync,const std::string inSavePath);
 	bool SetParas(int inWidth, int inHeight, int inOffsetX,double inExposureTime, double inAcquisitionFrameRate);
 	bool StartCapture();
 	bool StopCapture();
 	bool BSaveValid();
 	void SaveImageFromQueue();
 private:
+	CellDetect m_celldetect;
 	std::string m_save_path;
 	int m_num;
 	bool GetFrame();
