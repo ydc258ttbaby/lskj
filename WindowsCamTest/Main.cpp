@@ -16,6 +16,7 @@
 #include "LogWindows.h"
 #include "implot-master/implot.h"
 #include "CellDetect.h"
+#include"ImGuiFileDialog-Lib_Only/ImGuiFileDialog.h"
 
 //#define STB_IMAGE_IMPLEMENTATION
 #include "stbimage/stb_image.h"
@@ -23,7 +24,6 @@
 #include <stdio.h>
 #include <vector>
 #include <string>
-#include"ImGuiFileDialog-Lib_Only/ImGuiFileDialog.h"
 #include <Windows.h>
 #include <unordered_map>
 #include <tuple>
@@ -43,136 +43,129 @@
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
 #pragma comment(lib, "legacy_stdio_definitions")
 #endif
-IInterface* m_pShowUI = NULL;
-int g_FlowState = 0;
-static bool g_b_connect = false;
-int g_functionType = 0;
+
+// global flow
+IInterface* g_flow = NULL;
+int g_function_type = 0;
 int g_para1 = 0;
 int g_para2 = 0;
 int g_para3 = 0;
 
-unsigned int g_camera_num = 0;
-std::mutex camera_num_mutex;
+// global image save 
+std::string g_file_path = "E:\\ydc";
+bool g_b_save = false;
+bool g_b_async_save = false;
+bool g_b_preview = false;
 
+// global plot
+std::vector<int> g_second_array;
+std::vector<int> g_img_per_second_array;
+std::vector<int> g_cell_per_second_array;
+std::vector<int> g_cell_total_array;
+int g_cell_total;
+int g_cell_per_second_avg = 0;
+int g_img_per_second_avg = 0;
 
-std::string g_filepath = "E:\\ydc1";
-std::string g_imagepath = "";
+// global logger
+LogWindows* g_LogWindow = new LogWindows();
 
-bool g_bSave = false;
-bool g_bAsyncSave = false;
-bool g_bPreview = false;
-int g_max_count_per_second = 0;
-int g_last_count_per_second = 0;
-int g_captured_img = 0;
-std::vector<int> img_per_second_list;
-std::vector<int> cell_per_second_list;
-std::vector<int> cell_total_list;
-int cell_total;
-int img_per_second_avg = 0;
-int cell_per_second_avg = 0;
-std::vector<int> second_list;
-void SaveImageAsync(NativeCamera* inCamera) {
+// detect image path
+const int g_detect_class_num = 3; 
+const int g_detect_preview_num = 10;
+const int g_detect_img_width = 100;
+const int g_detect_img_height = 100;
+std::vector<std::vector<std::string> > g_detect_img_paths(g_detect_class_num,std::vector<std::string>(g_detect_preview_num,""));
+std::vector<std::vector<GLuint> > g_detect_tex_ids(g_detect_class_num, std::vector<GLuint>(g_detect_preview_num, 0));
+
+//progress
+float g_progress = 0;
+
+void SaveImageAsync(NativeCamera* in_camera) {
     int count = 0;
-    std::string old_time_str;
-    int count_in_second = 1;
-    int cell_in_second = 1;
-    struct tm timeInfo;
-    time_t rawTime;
     int second = 0;
+    int img_per_second = 1;
+    int cell_per_second = 1;
+    std::string old_time_str;
+    struct tm time_info;
+    time_t raw_time;
     while (true) {
-        int cellNum = 0;
-        if (g_bPreview) {
-            if (g_bSave && std::filesystem::is_directory(g_filepath)) {
-                time(&rawTime);
-                localtime_s(&timeInfo, &rawTime);
-                char buffer[100];
-                strftime(buffer, 100, "Pic_%G_%m_%d_%H%M%S_blockId#", &timeInfo);
-                if (std::string(buffer) != old_time_str) {
-                    g_last_count_per_second = count_in_second;
-                    if (count_in_second > g_max_count_per_second) {
-                        g_max_count_per_second = count_in_second;
-                    }
-                    cell_total += cell_in_second;
-                    img_per_second_list.push_back(count_in_second);
-                    cell_per_second_list.push_back(cell_in_second);
-                    cell_total_list.push_back(cell_total);
-                    second_list.push_back(second++);
-                    count_in_second = 1;
-                    cell_in_second = 1;
+        int cell_num = 0;
+        if (g_b_preview) {
+            if (g_b_save && std::filesystem::is_directory(g_file_path)) {
+                time(&raw_time);
+                localtime_s(&time_info, &raw_time);
+                char time_info_buffer[100];
+                strftime(time_info_buffer, 100, "Pic_%G_%m_%d_%H%M%S_blockId#", &time_info);
+                if (std::string(time_info_buffer) != old_time_str) {
+                    g_cell_total += cell_per_second;
+                    g_img_per_second_array.push_back(img_per_second);
+                    g_cell_per_second_array.push_back(cell_per_second);
+                    g_cell_total_array.push_back(g_cell_total);
+                    g_second_array.push_back(second++);
+                    img_per_second = 1;
+                    cell_per_second = 1;
                 }
-                old_time_str = std::string(buffer);
+                old_time_str = std::string(time_info_buffer);
                 char count_str[6];
-                sprintf_s(count_str, 6, "%05d", count_in_second);
-                std::string res = old_time_str + std::string(count_str) + ".bmp";
-                std::filesystem::path imagePath = std::filesystem::path(g_filepath);
-                imagePath /= std::filesystem::path(res);
-                cellNum = inCamera->GetFrame(true, g_bAsyncSave, imagePath.string());
-                if (cellNum > 0) {
+                sprintf_s(count_str, 6, "%05d", img_per_second);
+                std::string image_save_name = old_time_str + std::string(count_str) + ".bmp";
+                std::filesystem::path image_save_path = std::filesystem::path(g_file_path);
+                image_save_path /= std::filesystem::path(image_save_name);
+                cell_num = in_camera->GetFrame(true, g_b_async_save, image_save_path.string());
+                if (cell_num > 0) {
                     count++;
-                    g_captured_img = count;
-                    count_in_second++;
-                    cell_in_second += cellNum;
+                    img_per_second++;
+                    cell_per_second += cell_num;
                 }
             }
             else {
-                inCamera->GetFrame(false, false, "");
+                in_camera->GetFrame(false, false, "");
             }
         }
     }
 
 }
-float average(const std::vector<int>& v) {
-    float res = 0;
+float VectorAverage(const std::vector<int>& v) {
+    float avg = 0;
     for (const int& e : v) {
-        res += e;
+        avg += e;
     }
-    res /= v.size();
-    return res;
+    avg /= v.size();
+    return avg;
 }
 
-LogWindows* g_LogWindow = new LogWindows();
-
-void UpdateInstateCallback(int functionType, int para1, int para2, int para3)
+void UpdateInstateCallback(int in_function_type, int in_para1, int in_para2, int in_para3)
 {
-    g_functionType = functionType;
-    g_para1 = para1;
-    g_para2 = para2;
-    g_para3 = para3;
-    if (functionType == 56) {
-        g_b_connect = static_cast<bool>( para1);
-    }
+    g_function_type = in_function_type;
+    g_para1 = in_para1;
+    g_para2 = in_para2;
+    g_para3 = in_para3;
 
 }
 
-void TestInit()
+void FlowInit()
 {
-    ::OutputDebugStringA("#22 TestInit.\n");
-    //该方法不支持多线程调用
-    //function<void(int, int, int, int)> call = std::bind(&UpdateInstateCallback, 
-    //	std::tr1::placeholders::_1, std::tr1::placeholders::_2, 
-    //	std::tr1::placeholders::_3, std::tr1::placeholders::_4);
+    ::OutputDebugStringA("#22 FlowInit.\n");
 
     IInterface* pShowUI = IInterface::CreateInstance();
-    m_pShowUI = pShowUI;
+    g_flow = pShowUI;
 
     pShowUI->SetInitStateCallback(&UpdateInstateCallback);//设置事件响应回调
-
-    //初始化
     pShowUI->Init();
 }
 
-bool LoadTextureFromImage(cv::Mat image, GLuint* out_texture)
+bool LoadTextureFromImage(cv::Mat in_image, GLuint* out_texture)
 {
-    glPixelStorei(GL_UNPACK_ALIGNMENT,(image.step &3) ? 1:4);
-    glPixelStorei(GL_UNPACK_ROW_LENGTH,static_cast<GLint>(image.step/ image.elemSize()));
-    GLenum internalformat = GL_RGB;
-    if (image.channels() == 4) internalformat = GL_RGBA;
-    if (image.channels() == 3) internalformat = GL_RGB;
-    if (image.channels() == 2) internalformat = GL_RG;
-    if(image.channels() == 1) internalformat = GL_RED;
+    glPixelStorei(GL_UNPACK_ALIGNMENT, (in_image.step & 3) ? 1 : 4);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(in_image.step / in_image.elemSize()));
+    GLenum internal_format = GL_RGB;
+    if (in_image.channels() == 4) internal_format = GL_RGBA;
+    if (in_image.channels() == 3) internal_format = GL_RGB;
+    if (in_image.channels() == 2) internal_format = GL_RG;
+    if (in_image.channels() == 1) internal_format = GL_RED;
 
-    GLenum externalformat = GL_BGR;
-    if(image.channels() == 1) externalformat = GL_RED;
+    GLenum external_format = GL_BGR;
+    if (in_image.channels() == 1) external_format = GL_RED;
 
     GLuint image_texture;
     glGenTextures(1, &image_texture);
@@ -186,9 +179,9 @@ bool LoadTextureFromImage(cv::Mat image, GLuint* out_texture)
 
     // Upload pixels into texture
     try {
-        glTexImage2D(GL_TEXTURE_2D, 0, internalformat, image.cols, image.rows, 0, externalformat, GL_UNSIGNED_BYTE, image.ptr());
+        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, in_image.cols, in_image.rows, 0, external_format, GL_UNSIGNED_BYTE, in_image.ptr());
     }
-    catch(std::exception & e) {
+    catch (std::exception& e) {
         std::cout << "exception : " << e.what() << std::endl;
     }
 
@@ -196,51 +189,60 @@ bool LoadTextureFromImage(cv::Mat image, GLuint* out_texture)
     *out_texture = image_texture;
     return true;
 }
-static void glfw_error_callback(int error, const char* description)
+static void GlfwErrorCallback(int in_error, const char* in_description)
 {
-    fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+    fprintf(stderr, "Glfw Error %d: %s\n", in_error, in_description);
 }
-
-HANDLE g_hOupput = 0;
+cv::Mat GrayToRGB(cv::Mat in_gray_image) {
+    cv::Mat channels[3];
+    channels[0] = in_gray_image;
+    channels[1] = in_gray_image;
+    channels[2] = in_gray_image;
+    cv::Mat img;
+    cv::merge(channels, 3, img);
+    return img;
+}
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPWSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_ LPWSTR    lpCmdLine,
+    _In_ int       nCmdShow)
 {
-    // Setup window
-    TestInit();
+    // Flow init
+    FlowInit();
+
+    // open console
     AllocConsole();
     HANDLE  g_hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     freopen("CONIN$", "r", stdin);
     freopen("CONOUT$", "w", stdout);
     freopen("CONOUT$", "w", stderr);
-    glfwSetErrorCallback(glfw_error_callback);
+
+    // glfw init
+    glfwSetErrorCallback(GlfwErrorCallback);
     if (!glfwInit())
         return 1;
 
-    // Decide GL+GLSL versions
-    // GL 3.0 + GLSL 130
+    // opengl version
     const char* glsl_version = "#version 330";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // Create window with graphics context
+    // create window
     int nScreenWidth = GetSystemMetrics(SM_CXSCREEN);
     int nScreenHeight = GetSystemMetrics(SM_CYSCREEN);
-
-    GLFWwindow* window = glfwCreateWindow(nScreenWidth-300, nScreenHeight-200, "LSKJ-VS1000", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(nScreenWidth, nScreenHeight, "LSKJ-VS1000", NULL, NULL);
     if (window == NULL)
         return 1;
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
-    // glad用于管理现代opengl 的函数指针
+    glfwSwapInterval(1); 
+    // glad bind to window
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
-    // Setup Dear ImGui context
+    // Setup ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImPlot::CreateContext();
@@ -250,32 +252,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsClassic();
 
-    // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
-
-    // main window state
-    bool show_demo_window = false;
-    bool b_show_capture_window = true;
-    bool b_show_statis_window = true;
-
-    // main menu state
-    bool b_quit = false;
 
     // capture state
     bool b_start_capture = false;
     bool b_stop_capture = true;
-    bool b_sample_in = true;
     int pos_selected = 39;
     const char* volume_items[] = { "10  uL","20  uL","30  uL","50  uL","100 uL" };
-    int volume_array[5] = {10,20,30,50,100};
+    int volume_array[5] = { 10,20,30,50,100 };
     int volume_current = 0;
     bool b_save = false;
-    bool b_preview = true;
+    bool b_preview = false;
     enum Speed_Element { Element_1, Element_2, Element_3, Element_COUNT };
-    int speed_array[3] = {10,20,30};
+    int speed_array[3] = { 10,20,30 };
     int speed_current_elem = Element_1;
     char img_width_cstr[128] = "320";
     char img_offset_x_cstr[128] = "40";
@@ -291,7 +282,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     int laser_intensity = atoi(laser_intensity_cstr);
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    enum Info_Item{Item_et,Item_ev,Item_ci,Item_cc,Item_tv,Item_s,Item_px,Item_py,Item_count};
+    enum Info_Item { Item_et, Item_ev, Item_ci, Item_cc, Item_tv, Item_s, Item_px, Item_py, Item_count };
     std::vector<std::tuple<std::string, float, std::string> > info_v = {
     std::make_tuple("elapsed time",0.0,"s"),
     std::make_tuple("elapsed volume",0.0,"uL"),
@@ -304,161 +295,109 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     };
 
-    // preview state
-    bool b_show_preview_window = true;
-
     // load image
-
-    int my_image_width = 320;
-    int my_image_offset_x = 40;
-    int my_image_height = 480;
-    int my_image_exposure_time = 170;
-    int my_image_acquisition_frame_rate = 2000;
-    GLuint my_image_texture = 0;
-    //IM_ASSERT(ret);
-
-    //log window
+    GLuint tex_id_preview = 0;
+    // log window
     g_LogWindow->AddLog("hello world \n");
 
     // Native camera
-    NativeCamera* m_camera = new NativeCamera(g_LogWindow);
-    if (m_camera->Init()) {
-        m_camera->SetParas(my_image_width, my_image_height, my_image_offset_x, my_image_exposure_time, my_image_acquisition_frame_rate);
+    NativeCamera* camera = new NativeCamera(g_LogWindow, g_detect_class_num,g_detect_preview_num);
+    if (camera->Init()) {
+        camera->SetParas(atoi(img_width_cstr), atoi(img_height_cstr), atoi(img_offset_x_cstr), atoi(img_exposure_cstr), atoi(img_acquisition_frame_rate_cstr));
     }
 
-    std::thread thread_save_img = std::thread(SaveImageAsync, m_camera);
+    std::thread thread_save_img = std::thread(SaveImageAsync, camera);
     thread_save_img.detach();
-    if (m_camera->SaveAsync()) {
-        std::thread thread_save_image = std::thread([](NativeCamera* inCamera) {
-            inCamera->SaveImageFromQueue();
-            }, m_camera);
+    if (camera->SaveAsync()) {
+        std::thread thread_save_image = std::thread([](NativeCamera* in_camera) {
+            in_camera->SaveImageFromQueue();
+            }, camera);
         thread_save_image.detach();
-    }
-    cv::Mat testImg;
-    {
-        testImg = cv::imread("C:\\0222\\1_\\Pic_2022_02_22_155135_blockId#58150.bmp");
     }
 
     // laser control
-
-    std::string serialName = "\\\\.\\COM4";
-    LaserControl* m_laser = new LaserControl(serialName.c_str(), laser_width, laser_frequency, laser_intensity, g_LogWindow);
-
-    // mkdir g_filepath
-    if (!std::filesystem::exists(std::filesystem::path(g_filepath))) {
-        //std::filesystem::create_directories(std::filesystem::path(g_filepath));
-        //g_LogWindow->AddLog("create path %s \n",g_filepath);
-    }
+    std::string serial_name = "\\\\.\\COM4";
+    LaserControl* laser = new LaserControl(serial_name.c_str(), laser_width, laser_frequency, laser_intensity, g_LogWindow);
 
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-        if (b_quit) {
-            break;
+        if (b_save != g_b_save) {
+            g_b_save = b_save;
         }
-        //cv::Mat* image_temp = nullptr;
-        
-
-        //ImPlot::ShowDemoWindow();
-
-        if (b_save != g_bSave) {
-            g_bSave = b_save;
+        if (b_preview && !g_b_preview) {
+            camera->StartCapture();
+            g_b_preview = b_preview;
         }
-        if (b_preview && !g_bPreview) {
-            m_camera->StartCapture();
-            g_bPreview = b_preview;
-        }
-        if (!b_preview && g_bPreview) {
-            m_camera->StopCapture();
-            g_bPreview = b_preview;
+        if (!b_preview && g_b_preview) {
+            camera->StopCapture();
+            g_b_preview = b_preview;
         }
 
-        cv::Mat image_temp = m_camera->OperateImageQueue(cv::Mat(), false);
+        // load preview image
+        cv::Mat image_temp = camera->OperateImageQueue(cv::Mat(), false);
         if (!image_temp.empty()) {
-            bool bEmpty = image_temp.empty();
-            cv::Mat channels[3];
-            channels[0] = image_temp;
-            channels[1] = image_temp;
-            channels[2] = image_temp;
-            cv::Mat img;
-            cv::merge(channels,3,img);
-            bool ret = LoadTextureFromImage(img,&my_image_texture);
-            img.release();
-            for (int i = 0; i < 3; i++) {
-                channels[i].release();
-            }
+            bool ret = LoadTextureFromImage(GrayToRGB(image_temp), &tex_id_preview);
         }
         image_temp.release();
+        // load detect image 
+        for (int i = 0; i < g_detect_class_num; i++) {
+            std::vector<cv::Mat> temp_images = camera->OperateDetectImageQueue(cv::Mat(),false,i);
+            for (int j = 0; j < temp_images.size(); j++) {
+                cv::Mat detect_img = GrayToRGB(temp_images[j]);
+                if (!detect_img.empty()) {
+                    LoadTextureFromImage(detect_img, &(g_detect_tex_ids[i][j]));
+                }
+            }
+        }
 
-        //std::cout << "camera num" << m_camera->GetDeviceNum() << std::endl;
+        //std::cout << "camera num" << camera->GetDeviceNum() << std::endl;
         std::get<1>(info_v[Item_tv]) = volume_array[volume_current];
         std::get<1>(info_v[Item_s]) = speed_array[speed_current_elem];
-        std::get<1>(info_v[Item_py]) = int(pos_selected/8) + 1;
+        std::get<1>(info_v[Item_py]) = int(pos_selected / 8) + 1;
         std::get<1>(info_v[Item_px]) = pos_selected % 8 + 1;
-        std::get<1>(info_v[Item_ci]) = g_captured_img;
-        
+        std::get<1>(info_v[Item_ci]) = 0;
+
 
         glfwPollEvents();
+
+        // style init
+        ImGuiIO& io = ImGui::GetIO();
+        io.FontGlobalScale = 1.5;
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.FrameRounding = 4;
+        //style.SelectableTextAlign = ImVec2(0.5, 0.5);
+
+        ImGuiWindowFlags window_flags = 0;
+        window_flags |= ImGuiWindowFlags_NoTitleBar;
+        window_flags |= ImGuiWindowFlags_NoScrollbar;
+        //window_flags |= ImGuiWindowFlags_MenuBar;
+        //window_flags |= ImGuiWindowFlags_NoMove;
+        //window_flags |= ImGuiWindowFlags_NoResize;
+        //window_flags |= ImGuiWindowFlags_NoCollapse;
+        //window_flags |= ImGuiWindowFlags_NoNav;
+        //window_flags |= ImGuiWindowFlags_NoBackground;
+        //window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus;
+        //window_flags |= ImGuiWindowFlags_UnsavedDocument;
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        
+
         // main menu
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("Option")) {
-
-                ImGui::MenuItem("Quit", NULL, &b_quit);
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
         }
-
-        // main window
-        {
-            static float f = 0.0f;
-            static int counter = 0;
-
-            ImGui::Begin("Main Window");
-            ImGuiIO& io = ImGui::GetIO();
-            io.FontGlobalScale = 1.5;
-            //const float MIN_SCALE = 0.3f;
-            //const float MAX_SCALE = 2.0f;
-            //ImGui::DragFloat("global scale", &io.FontGlobalScale, 0.005f, MIN_SCALE, MAX_SCALE, "%.2f", ImGuiSliderFlags_AlwaysClamp); // Scale everything
-            ImGuiStyle& style = ImGui::GetStyle();
-            style.FrameRounding = 4;
-            if (ImGui::SliderFloat("FrameRounding", &style.FrameRounding, 0.0f, 12.0f, "%.0f"))
-                style.GrabRounding = style.FrameRounding; // Make GrabRounding always the same value as FrameRounding
-            style.SelectableTextAlign = ImVec2(0.5,0.5);
-            ImGui::SliderFloat2("SelectableTextAlign", (float*)&style.SelectableTextAlign, 0.0f, 1.0f, "%.2f");
-            ImGui::End();
-        }
-        // test window
-        {
-            ImGui::Begin("test window");
-            if (ImGui::Button("clear")) {
-                if (std::filesystem::exists(std::filesystem::path(g_filepath))) {
-                    std::thread clear_thread = std::thread([]() {
-                        g_LogWindow->AddLog("begin clear %s \n", g_filepath);
-                        std::filesystem::remove_all(std::filesystem::path(g_filepath));
-                        std::filesystem::create_directories(std::filesystem::path(g_filepath));
-                        g_LogWindow->AddLog("end clear %s \n", g_filepath);
-                        });
-                    clear_thread.detach();
-                }
-            }
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-            ImGui::End();
-
-        }
         // capture window
-        if (b_show_capture_window)
         {
-            ImGui::Begin("Capture", &b_show_capture_window);
-            
+            ImGui::Begin("Capture", NULL, window_flags);
+            ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign,ImVec2(0.5,0.5));
+
             // pos
-            ImGui::Text("Choose pos :");
             for (int r = 0; r < 5; r++) {
                 for (int c = 0; c < 8; c++) {
                     if (c > 0)
@@ -472,201 +411,239 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::PopID();
                 }
             }
+            ImGui::PopStyleVar(1);
+
             ImGui::Separator();
-            
-            if (ImGui::Button("Start")) {
-                m_pShowUI->CollectStart(std::get<1>(info_v[Item_tv]), std::get<1>(info_v[Item_s]), 0, std::get<1>(info_v[Item_py]), std::get<1>(info_v[Item_px]));
-                //img_per_second_list.clear();
-                //m_pShowUI->CollectStart(10, 10, 0, 5, 8);
+            //ImGui::PushItemWidth(-FLT_MIN);
+
+            int current_region_width = ImGui::GetContentRegionAvail().x;
+            //ImGui::BeginGroup();
+            {
+                if (ImGui::Button("Start", ImVec2(current_region_width * 0.5f, 40))) {
+                    g_flow->CollectStart(std::get<1>(info_v[Item_tv]), std::get<1>(info_v[Item_s]), 0, std::get<1>(info_v[Item_py]), std::get<1>(info_v[Item_px]));
+                }
+                if (ImGui::IsItemHovered()) {
+                    char tip_buffer[100];
+                    sprintf(tip_buffer,"volume: %.0f \nspeed : %.0f \npos   : %.0f %.0f \n", std::get<1>(info_v[Item_tv]), std::get<1>(info_v[Item_s]), std::get<1>(info_v[Item_py]), std::get<1>(info_v[Item_px]));
+                    ImGui::SetTooltip(tip_buffer);
+                }
+                //ImGui::EndGroup();
             }
-            // in and out
-            if (ImGui::Button("Stop")) {
-                m_pShowUI->StopCollect();
+            ImGui::SameLine();
+            if (ImGui::Button("Stop", ImVec2(current_region_width * 0.5f,40))) {
+                g_flow->StopCollect();
             }
-            if (ImGui::Button("Box in out")) {
-                m_pShowUI->OpenCloseDoor();
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(1.0,0.43,0.35,1.0));
+            ImGui::ProgressBar(g_progress, ImVec2(current_region_width * 1.0f, 4));
+            ImGui::PopStyleColor(1);
+
+            if (ImGui::Button("Box in/out", ImVec2(current_region_width * 0.5f, 40))) {
+                g_flow->OpenCloseDoor();
             }
-            ImGui::Checkbox("Save Image", &b_save);
-            // open Dialog Simple
-            if (ImGui::Button("Open Path")) {
+            ImGui::SameLine();
+            // open path
+            if (ImGui::Button("Open Path", ImVec2(current_region_width * 0.5f, 40))) {
                 ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", nullptr, ".");
             }
-            /*if (ImGui::Button("Clear data")) {
-
-                cell_per_second_list = std::vector<int>();
-                cell_per_second_avg = 0;
-                cell_total_list = std::vector<int>();
-            }*/
-            // display
             if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
             {
                 if (ImGuiFileDialog::Instance()->IsOk())
                 {
-                    g_filepath = ImGuiFileDialog::Instance()->GetCurrentPath().c_str();
+                    g_file_path = ImGuiFileDialog::Instance()->GetCurrentPath().c_str();
                 }
                 ImGuiFileDialog::Instance()->Close();
             }
             //save path
+            ImGui::Checkbox("Save image in: ", &b_save);
             ImGui::SameLine();
-            ImGui::Text("%s", (char*)g_filepath.c_str());
+            if (std::filesystem::is_directory(std::filesystem::path(g_file_path))) {
+                ImGui::Text(g_file_path.c_str());
+            }
+            else {
+                ImGui::TextColored(ImVec4(1.0,0.0,0.0,1.0), g_file_path.c_str());
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Path not exists");
+                }
+            }
+            ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+            ImGui::End();
+        }
+        // preview window
+        {
+            ImGui::Begin("Preview", NULL, window_flags);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+            ImGui::Image((void*)(intptr_t)tex_id_preview, ImVec2(atoi(img_width_cstr), atoi(img_height_cstr)));
+            ImGui::Checkbox("Preview", &b_preview);
+            ImGui::End();
+        }
+        // statis window
+        {
+            ImGui::Begin("Statis", NULL, window_flags);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+            // plot data prepare
+            g_cell_per_second_avg = VectorAverage(g_cell_per_second_array);
+            g_img_per_second_avg = VectorAverage(g_img_per_second_array);
+            std::vector<int> cell_per_second_avg_list(g_second_array.size(), g_cell_per_second_avg);
+            std::vector<int> img_per_second_avg_list(g_second_array.size(), g_img_per_second_avg);
+            // begin plot
+            static ImPlotSubplotFlags flags = ImPlotSubplotFlags_NoTitle;
+            static float rratios[] = { 1,1 };
+            static float cratios[] = { 1,1,1 };
+            if (ImPlot::BeginSubplots("My Subplots", 2, 2, ImVec2(-1, -1), flags, rratios, cratios)) {
+                if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PlotLine("cell per second", g_second_array.data(), g_cell_per_second_array.data(), g_second_array.size());
+                    ImPlot::PlotLine("avg", g_second_array.data(), cell_per_second_avg_list.data(), g_second_array.size());
+                    ImPlot::EndPlot();
+                }
+                if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PlotLine("cell total", g_second_array.data(), g_cell_total_array.data(), g_second_array.size());
+                    ImPlot::EndPlot();
+                }
+                if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PlotLine("img per second", g_second_array.data(), g_img_per_second_array.data(), g_second_array.size());
+                    ImPlot::PlotLine("avg", g_second_array.data(), img_per_second_avg_list.data(), g_second_array.size());
+                    ImPlot::EndPlot();
+                }
+                ImPlot::EndSubplots();
+            }
+            ImGui::End();
+        }
+        // detect window
+        {
+            ImGui::Begin("detect", NULL, window_flags);
+            ImGui::BeginChild("scrolling", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
+            for (int i = 0; i < g_detect_class_num; i++) {
+                std::string btn_text = "class " + std::to_string(i);
+                if (ImGui::Button(btn_text.c_str(),ImVec2(100,100))) {
+
+                }
+                ImGui::SameLine();
+                for (int j = 0; j < g_detect_preview_num; j++) {
+                    ImGui::Image((void*)(intptr_t)g_detect_tex_ids[i][j], ImVec2(g_detect_img_width, g_detect_img_height));
+                    ImGui::SameLine();
+                }
+                ImGui::NewLine();
+            }
+            ImGui::EndChild();
             ImGui::End();
         }
         // debug window
         {
-            ImGui::Begin("debug");
-
-
-            // info table
-            static ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV;
-
-            if (ImGui::BeginTable("Info", 2, flags))
-            {
-                // Submit columns name with TableSetupColumn() and call TableHeadersRow() to create a row with a header in each column.
-                // (Later we will show how TableSetupColumn() has other uses, optional flags, sizing weight etc.)
-                ImGui::TableSetupColumn("Info");
-                ImGui::TableSetupColumn("Value");
-                ImGui::TableHeadersRow();
-                for (int row = 0; row < Item_count; row++)
+            ImGui::Begin("debug", NULL, window_flags);
+            ImGuiTabBarFlags tab_bar_flags = ImGuiTabBarFlags_None;
+            if (ImGui::BeginTabBar("MyTabBar", tab_bar_flags)) {
+                // info tab
+                if (ImGui::BeginTabItem("Info"))
                 {
-                    ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text(std::get<0>(info_v[row]).c_str(), 0, row);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text((std::to_string(static_cast<int>(std::get<1>(info_v[row]))) + " " + std::get<2>(info_v[row])).c_str(), 1, row);
-                }
-                ImGui::EndTable();
-            }
-            ImGui::Text("Max Count:%d", (g_max_count_per_second));
-            ImGui::Text("Last Count:%d", (g_last_count_per_second));
-            ImGui::Text("functionType %d", g_functionType);
-            ImGui::Text("para1 %d", g_para1);
-            ImGui::Text("para2 %d", g_para2);
-            ImGui::Text("para3 %d", g_para3);
-
-            ImGui::End();
-        }
-        // properties window
-        {
-            ImGui::Begin("Properties");
-
-            ImGui::Combo("Choose volume", &volume_current, volume_items, IM_ARRAYSIZE(volume_items));
-
-            // speed slider
-            const char* elems_names[Element_COUNT] = { "10 uL/min","20 uL/min","30 uL/min" };
-            const char* elem_name = (speed_current_elem >= 0 && speed_current_elem < Element_COUNT) ? elems_names[speed_current_elem] : "Unknown";
-            ImGui::SliderInt("Choose speed", &speed_current_elem, 0, Element_COUNT - 1, elem_name);
-
-            // image setting
-            if (ImGui::Button("Update Camera Setting")) {
-                my_image_exposure_time = atoi(img_exposure_cstr);
-                my_image_height = atoi(img_height_cstr);
-                my_image_width = atoi(img_width_cstr);
-                my_image_offset_x = atoi(img_offset_x_cstr);
-                my_image_acquisition_frame_rate = atoi(img_acquisition_frame_rate_cstr);
-                if (!g_bSave) {
-                    if (m_camera->SetParas(my_image_width, my_image_height, my_image_offset_x, my_image_exposure_time, my_image_acquisition_frame_rate)) {
-                        std::cout << "set paras success " << std::endl;
+                    static ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV;
+                    if (ImGui::BeginTable("Info", 2, flags))
+                    {
+                        ImGui::TableSetupColumn("Info");
+                        ImGui::TableSetupColumn("Value");
+                        ImGui::TableHeadersRow();
+                        for (int row = 0; row < Item_count; row++)
+                        {
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::Text(std::get<0>(info_v[row]).c_str(), 0, row);
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::Text((std::to_string(static_cast<int>(std::get<1>(info_v[row]))) + " " + std::get<2>(info_v[row])).c_str(), 1, row);
+                        }
+                        ImGui::EndTable();
                     }
-                    else {
-                        std::cout << "set paras failed " << std::endl;
-                    }
+                    ImGui::Text("functionType %d", g_function_type);
+                    ImGui::Text("para1 %d", g_para1);
+                    ImGui::Text("para2 %d", g_para2);
+                    ImGui::Text("para3 %d", g_para3);
+                    ImGui::EndTabItem();
                 }
+                // properties tab
+                if (ImGui::BeginTabItem("Properties")) {
+                    ImGui::Combo("Choose volume", &volume_current, volume_items, IM_ARRAYSIZE(volume_items));
+                    // speed slider
+                    const char* elems_names[Element_COUNT] = { "10 uL/min","20 uL/min","30 uL/min" };
+                    const char* elem_name = (speed_current_elem >= 0 && speed_current_elem < Element_COUNT) ? elems_names[speed_current_elem] : "Unknown";
+                    ImGui::SliderInt("Choose speed", &speed_current_elem, 0, Element_COUNT - 1, elem_name);
+                    // image setting
+                    if (ImGui::Button("Update Camera Setting")) {
+                        if (!g_b_save) {
+                            if (camera->SetParas(atoi(img_width_cstr), atoi(img_height_cstr), atoi(img_offset_x_cstr), atoi(img_exposure_cstr), atoi(img_acquisition_frame_rate_cstr))) {
+                                std::cout << "set paras success " << std::endl;
+                            }
+                            else {
+                                std::cout << "set paras failed " << std::endl;
+                            }
+                        }
+                    }
+                    ImGui::InputText("Width", img_width_cstr, IM_ARRAYSIZE(img_width_cstr));
+                    ImGui::InputText("Height", img_height_cstr, IM_ARRAYSIZE(img_height_cstr));
+                    ImGui::InputText("OffsetX", img_offset_x_cstr, IM_ARRAYSIZE(img_offset_x_cstr));
+                    ImGui::InputText("Exposure(us)", img_exposure_cstr, IM_ARRAYSIZE(img_exposure_cstr));
+                    ImGui::InputText("FrameRate", img_acquisition_frame_rate_cstr, IM_ARRAYSIZE(img_acquisition_frame_rate_cstr));
+                    // laser setting
+                    ImGui::Separator();
+                    ImGui::Text("Laser");
+                    if (ImGui::Button("Reconnect")) {
+                        delete laser;
+                        laser = new LaserControl(serial_name.c_str(), laser_width, laser_frequency, laser_intensity, g_LogWindow);
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Open")) {
+                        laser->OpenLaser();
+                        Sleep(10);
+                        laser->OpenLaser();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Close")) {
+                        laser->CloseLaser();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Update")) {
+                        laser_width = atoi(laser_width_cstr);
+                        laser_frequency = atoi(laser_frequency_cstr);
+                        laser_intensity = atoi(laser_intensity_cstr);
+                        laser->SetParas(laser_width, laser_frequency, laser_intensity);
+                    }
+                    ImGui::InputText("Frequency(Hz)", laser_frequency_cstr, IM_ARRAYSIZE(laser_frequency_cstr));
+                    ImGui::InputText("Width(ns)", laser_width_cstr, IM_ARRAYSIZE(laser_width_cstr));
+                    ImGui::InputText("current(mA)", laser_intensity_cstr, IM_ARRAYSIZE(laser_intensity_cstr));
+                    ImGui::EndTabItem();
+                }
+                // test tab
+                if (ImGui::BeginTabItem("test")) {
+                    if (ImGui::Button("clear")) {
+                        if (std::filesystem::exists(std::filesystem::path(g_file_path))) {
+                            std::thread clear_thread = std::thread([]() {
+                                g_LogWindow->AddLog("begin clear %s \n", g_file_path);
+                                std::filesystem::remove_all(std::filesystem::path(g_file_path));
+                                std::filesystem::create_directories(std::filesystem::path(g_file_path));
+                                g_LogWindow->AddLog("end clear %s \n", g_file_path);
+                                });
+                            clear_thread.detach();
+                        }
+                    }
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
             }
-            ImGui::InputText("Width", img_width_cstr, IM_ARRAYSIZE(img_width_cstr));
-            ImGui::InputText("Height", img_height_cstr, IM_ARRAYSIZE(img_height_cstr));
-            ImGui::InputText("OffsetX", img_offset_x_cstr, IM_ARRAYSIZE(img_offset_x_cstr));
-            ImGui::InputText("Exposure(us)", img_exposure_cstr, IM_ARRAYSIZE(img_exposure_cstr));
-            ImGui::InputText("FrameRate", img_acquisition_frame_rate_cstr, IM_ARRAYSIZE(img_acquisition_frame_rate_cstr));
-            // laser setting
-            ImGui::Separator();
-            ImGui::Text("Laser");
-            if (ImGui::Button("Reconnect")) {
-                delete m_laser;
-                m_laser = new LaserControl(serialName.c_str(), laser_width, laser_frequency, laser_intensity,g_LogWindow);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Open")) {
-                m_laser->OpenLaser();
-                Sleep(10);
-                m_laser->OpenLaser();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Close")) {
-                m_laser->CloseLaser();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Update")) {
-                laser_width = atoi(laser_width_cstr);
-                laser_frequency = atoi(laser_frequency_cstr);
-                laser_intensity = atoi(laser_intensity_cstr);
-                m_laser->SetParas(laser_width, laser_frequency, laser_intensity);
-            }
-            ImGui::InputText("Frequency(Hz)", laser_frequency_cstr, IM_ARRAYSIZE(laser_frequency_cstr));
-            ImGui::InputText("Width(ns)", laser_width_cstr, IM_ARRAYSIZE(laser_width_cstr));
-            ImGui::InputText("current(mA)", laser_intensity_cstr, IM_ARRAYSIZE(laser_intensity_cstr));
-
             ImGui::End();
-
         }
-        // preview window
-        if (b_show_preview_window) {
-            ImGui::Begin("Preview", &b_show_preview_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Checkbox("Preview", &b_preview);
-            ImGui::Image((void*)(intptr_t)my_image_texture, ImVec2(my_image_width, my_image_height));
-            ImGui::End();
-        }
-        // statis window
-        if (b_show_statis_window)
+        // Log window
         {
-            ImGui::Begin("Statis", &b_show_statis_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            std::vector<float> plot_data;
-            for (int i = 0; i < 1000; i++) {
-                plot_data.push_back(i);
-            }
-            int bar_data[11] = {1,2,3,4,5,6,7,8,9,10,11};
-            img_per_second_avg = average(img_per_second_list);
-            std::vector<int> img_per_second_avg_list(second_list.size(),img_per_second_avg);
-            //if (ImPlot::BeginPlot("My Plot")) {
-            //    //ImPlot::PlotBars("img per second", img_per_second_list.data(), img_per_second_list.size());
-            //    //ImPlot::PlotScatter("Data 1", bar_data, bar_data, 11);
-            //    ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-
-            //    ImPlot::PlotLine("img per second", second_list.data(), img_per_second_list.data(), second_list.size());
-            //    ImPlot::PlotLine("avg", second_list.data(), img_per_second_avg_list.data(), second_list.size());
-            //    ImPlot::EndPlot();
-            //}
-            cell_per_second_avg = average(cell_per_second_list);
-            if (ImPlot::BeginPlot("Cell Per Second")) {
-                //ImPlot::PlotBars("img per second", img_per_second_list.data(), img_per_second_list.size());
-                //ImPlot::PlotScatter("Data 1", bar_data, bar_data, 11);
-                ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-
-                ImPlot::PlotLine("cell per second", second_list.data(), cell_per_second_list.data(), second_list.size());
-                ImPlot::PlotLine("avg", second_list.data(), img_per_second_avg_list.data(), second_list.size());
-                ImPlot::EndPlot();
-            }
-            if (ImPlot::BeginPlot("Cell Total")) {
-                //ImPlot::PlotBars("img per second", img_per_second_list.data(), img_per_second_list.size());
-                //ImPlot::PlotScatter("Data 1", bar_data, bar_data, 11);
-                ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                ImPlot::PlotLine("img per second", second_list.data(), cell_total_list.data(), second_list.size());
-                ImPlot::EndPlot();
-            }
-            ImGui::End();
+            g_LogWindow->Draw("Log", NULL, window_flags);
         }
-        g_LogWindow->Draw("Log");
-
-        // Rendering
+        
         ImGui::Render();
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(0.f, 0.f, 0.f, 1.0f);//设置清理的颜色，即背景颜色
-        //glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
         glfwSwapBuffers(window);
     }
 
@@ -679,7 +656,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     glfwDestroyWindow(window);
     glfwTerminate();
 
-    delete m_laser;
+    delete laser;
 
     return 0;
 }
