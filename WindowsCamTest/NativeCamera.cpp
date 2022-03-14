@@ -224,7 +224,7 @@ void createAlphaMat(cv::Mat& mat) // 创建一个图像
 	}
 }
 
-int NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSavePath) {
+int NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSaveName, const std::string inSaveRootPath) {
 	int cellNum = 0;
 	m_bSave = bSave;
 	auto time_start = std::chrono::system_clock::now();
@@ -242,20 +242,20 @@ int NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSave
 			std::lock_guard<std::mutex> guard(steamsource_mutex);
 			if (NULL == pStreamSource) {
 				m_log_window->AddLog("pstream source is NULL \n");
-				return cellNum;
+				return -1;
 			}
 			ret = pStreamSource->getFrame(pStreamSource, &pFrame, 1);
 			if (ret < 0) {
 				m_log_window->AddLog("getFrame  fail.\n");
 				//getchar();
-				return cellNum;
+				return -1;
 			}
 		}
 		ret = pFrame->valid(pFrame);
 		if (ret < 0) {
 			m_log_window->AddLog("frame is invalid!\n");
 			pFrame->release(pFrame);
-			return cellNum;
+			return -1;
 		}
 		cv::Mat image = cv::Mat(pFrame->getImageHeight(pFrame),
 			pFrame->getImageWidth(pFrame),
@@ -265,10 +265,15 @@ int NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSave
 		std::vector<cv::Mat> cellImages = m_celldetect.getResult(image);
 		
 		cellNum = cellImages.size();
-
-		for (int i = 0; i < cellImages.size(); i++) {
-			std::string elePath = inSavePath.substr(0,inSavePath.size()-4)+std::to_string(i) + ".bmp";
-			cv::imwrite(elePath,cellImages[i]);
+		if (bSave) {
+			for (int i = 0; i < cellImages.size(); i++) {
+				std::filesystem::path real_save_root_path = std::filesystem::path(inSaveRootPath + "_" + std::to_string(Classify(cellImages[i])));
+				if (!std::filesystem::is_directory(real_save_root_path)) {
+					std::filesystem::create_directories(real_save_root_path);
+				}
+				real_save_root_path /= std::filesystem::path(inSaveName.substr(0, inSaveName.size() - 4) + std::to_string(i) + ".bmp");
+				cv::imwrite(real_save_root_path.string(), cellImages[i]);
+			}
 		}
 		if (b_time_to_preview) {
 			OperateImageQueue(image.clone(), true);
@@ -278,10 +283,10 @@ int NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSave
 		}
 		if (bSave) {
 			if (bSaveAsync) {
-				InsertImageQueue(image.clone(), inSavePath);
+				InsertImageQueue(image.clone(), (std::filesystem::path(inSaveRootPath)/std::filesystem::path(inSaveName)).string());
 			}
 			else {
-				//cv::imwrite(inSavePath, image);
+				//cv::imwrite((std::filesystem::path(inSaveRootPath)/std::filesystem::path(inSaveName)).string(), image);
 			}
 		}
 		image.release();

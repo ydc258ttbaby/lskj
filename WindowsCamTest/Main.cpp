@@ -81,7 +81,6 @@ std::vector<std::vector<GLuint> > g_detect_tex_ids(g_detect_class_num, std::vect
 float g_progress = 0;
 
 void SaveImageAsync(NativeCamera* in_camera) {
-    int count = 0;
     int second = 0;
     int img_per_second = 1;
     int cell_per_second = 1;
@@ -111,15 +110,14 @@ void SaveImageAsync(NativeCamera* in_camera) {
                 std::string image_save_name = old_time_str + std::string(count_str) + ".bmp";
                 std::filesystem::path image_save_path = std::filesystem::path(g_file_path);
                 image_save_path /= std::filesystem::path(image_save_name);
-                cell_num = in_camera->GetFrame(true, g_b_async_save, image_save_path.string());
-                if (cell_num > 0) {
-                    count++;
-                    img_per_second++;
+                cell_num = in_camera->GetFrame(true, g_b_async_save, image_save_name, g_file_path);
+                if (cell_num >= 0) {
+                    img_per_second += 1;
                     cell_per_second += cell_num;
                 }
             }
             else {
-                in_camera->GetFrame(false, false, "");
+                in_camera->GetFrame(false, false, "","");
             }
         }
     }
@@ -519,7 +517,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             for (int i = 0; i < g_detect_class_num; i++) {
                 std::string btn_text = "class " + std::to_string(i);
                 if (ImGui::Button(btn_text.c_str(),ImVec2(100,100))) {
-
+                    std::string path = g_file_path + "_" + std::to_string(i);
+                    if (std::filesystem::exists(std::filesystem::path(path))) {
+                        system(("start " + std::string(path)).c_str());
+                    }
+                    else {
+                        g_LogWindow->AddLog("file : %s not exists !! \n",path.c_str());
+                    }
                 }
                 ImGui::SameLine();
                 for (int j = 0; j < g_detect_preview_num; j++) {
@@ -624,6 +628,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                                 g_LogWindow->AddLog("end clear %s \n", g_file_path);
                                 });
                             clear_thread.detach();
+                        }
+                    }
+                    if (ImGui::Button("open file")) {
+                        if (std::filesystem::exists(std::filesystem::path(g_file_path))) {
+                            std::string cmd_str = "start " + g_file_path;
+                            system(cmd_str.c_str());
                         }
                     }
                     ImGui::EndTabItem();

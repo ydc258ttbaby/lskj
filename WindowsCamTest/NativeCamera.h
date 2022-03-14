@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include "LogWindows.h"
 #include "CellDetect.h"
+#include <filesystem>
 using namespace cv;
 
 using namespace std::literals;
@@ -21,7 +22,7 @@ public:
 	~NativeCamera();
 	bool Init();
 	uint32_t GetDeviceNum();
-	int GetFrame(bool bSave,bool bSaveAsync,const std::string inSavePath);
+	int GetFrame(bool bSave,bool bSaveAsync,const std::string inSaveName, const std::string inSaveRootPath);
 	bool SetParas(int inWidth, int inHeight, int inOffsetX,double inExposureTime, double inAcquisitionFrameRate);
 	bool StartCapture();
 	bool StopCapture();
