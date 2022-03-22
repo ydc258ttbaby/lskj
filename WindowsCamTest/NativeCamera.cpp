@@ -31,6 +31,8 @@ bool NativeCamera::SetParas(int inWidth,int inHeight,int inOffsetX,double inExpo
 }
 bool NativeCamera::StartCapture() {
 	if (pCamera != NULL && pStreamSource == NULL) {
+		
+
 		std::lock_guard<std::mutex> guard(steamsource_mutex);
 
 		int ret = GENICAM_CreateStreamSource(pCamera, &pStreamSource);
@@ -205,7 +207,6 @@ bool NativeCamera::Init()
 	else {
 		m_log_window->AddLog("connect success ! \n");
 	}
-	
 	return true;
 }
 bool NativeCamera::BSaveValid() {
@@ -323,4 +324,108 @@ bool NativeCamera::SaveAsync() {
 int NativeCamera::Classify(cv::Mat in_image) {
 	// to do: classify 
 	return 0;
+}
+bool NativeCamera::SaveImages(int inId, int inSecond, const std::string inName, bool inBSave) {
+
+	bool b_time_to_preview = false;
+	if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - m_time_old).count() > image_preview_interval) {
+		b_time_to_preview = true;
+		m_time_old = std::chrono::system_clock::now();
+	}
+	int32_t ret = 0;
+	uint64_t blockId = 0;
+	GENICAM_Frame* pFrame;
+	std_time ts = std::chrono::system_clock::now();
+	{
+		if (NULL == pStreamSource)
+		{
+			return false;
+		}
+
+		else {
+			if (pStreamSource != NULL) {
+				ret = pStreamSource->getFrame(pStreamSource, &pFrame, 1);
+				if (ret < 0) {
+					m_log_window->AddLog("getFrame  fail.\n");
+					this->StopCapture();
+					Sleep(1);
+					this->StartCapture();
+					return false;
+				}
+
+				ret = pFrame->valid(pFrame);
+				if (ret < 0) {
+					m_log_window->AddLog("frame is invalid!\n");
+					pFrame->release(pFrame);
+					return false;
+				}
+				cv::Mat image = cv::Mat(pFrame->getImageHeight(pFrame),
+					pFrame->getImageWidth(pFrame),
+					CV_8U,
+					(uint8_t*)((pFrame->getImage(pFrame)))
+				);
+
+				if (inBSave ) {
+					ImageInfo image_info;
+					image_info.m_image = image.clone();
+					image_info.m_id = inId;
+					image_info.m_name = inName;
+					image_info.m_second = inSecond;
+					m_total_images.push_back(image_info);
+				}
+
+				if (b_time_to_preview) {
+					OperateImageQueue(image.clone(), true);
+				}
+				image.release();
+				pFrame->release(pFrame);
+			}
+		}
+	}
+	return true;
+
+}
+void NativeCamera::AnalyzeImages(const std::string inSampleName, const std::string inRootPath) {
+	m_total_cells.reserve(10000);
+	int cell_id = 0;
+	for (int i = 0; i < m_total_images.size(); ++i) {
+		m_analyze_progress = static_cast<float>(i)/ m_total_images.size();
+		std::vector<CellInfo> cellInfos = m_celldetect.GetResult(m_total_images[i].m_image);
+		for (int j = 0; j < cellInfos.size(); ++j) {
+			CellInfo cell_info = cellInfos[j];
+			cell_info.m_second = m_total_images[i].m_second;
+			cell_info.m_id = cell_id;
+			cell_info.m_class = Classify(cell_info.m_image);
+			cell_info.m_name = inSampleName + "_" + std::to_string(cell_id) + "_" + std::to_string(cell_info.m_class) + "_" + m_total_images[i].m_name + ".bmp";
+			m_total_cells.push_back(cell_info);
+			cell_id++;
+
+			std::filesystem::path root_path = std::filesystem::path(inRootPath)/std::filesystem::path(std::to_string(cell_info.m_class));
+			if (!std::filesystem::exists(root_path)) {
+				std::filesystem::create_directories(root_path);
+			}
+			std::filesystem::path save_path = root_path /std::filesystem::path(cell_info.m_name);
+			m_log_window->AddLog("save img in %s \n", save_path.string().c_str());
+			cv::imwrite(save_path.string(),cell_info.m_image);
+		}
+		//std::filesystem::path root_path = std::filesystem::path(inRootPath) / std::filesystem::path(std::to_string(1));
+		//if (!std::filesystem::exists(root_path)) {
+		//	std::filesystem::create_directories(root_path);
+		//}
+		//std::filesystem::path save_path = root_path / std::filesystem::path(m_total_images[i].m_name + std::to_string(i) + ".bmp");
+		//cv::imwrite(save_path.string(), m_total_images[i].m_image);
+	}
+	std::vector<ImageInfo> temp;
+	m_total_images.swap(temp);
+}
+float NativeCamera::GetAnalyzeProgress() {
+	return m_analyze_progress;
+}
+int NativeCamera::GetTotalImageSize() {
+	return m_total_images.size();
+}
+std::vector<CellInfo> NativeCamera::GetTotalCells() {
+	std::vector<CellInfo> temp;
+	m_total_cells.swap(temp);
+	return temp;
 }

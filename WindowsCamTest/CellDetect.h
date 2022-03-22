@@ -24,6 +24,16 @@ struct CellInfo {
     float m_area;
     float m_perimeter;
     float m_radius;
+    int m_id;
+    int m_second;
+    std::string m_name;
+    int m_class;
+};
+struct ImageInfo {
+    cv::Mat m_image;
+    int m_id;
+    int m_second;
+    std::string m_name;
 };
 class CellDetect
 {
@@ -84,12 +94,15 @@ public:
 
         boxFilter(src_c, src_1, -1, Size(3, 3));
         threshold(src_1, src_2, 125, 255, THRESH_BINARY);
+        //imshow("src_3", src_2);
+        //waitKey(0);
         vector<vector<Point>> contours_small_img;
         findContours(255 - src_2, contours_small_img, RETR_EXTERNAL, CHAIN_APPROX_NONE);
         if (!contours_small_img.size())
             return res;
         Mat src_3 = Mat::zeros(src_2.size(), CV_8U);
         drawContours(src_3, contours_small_img, -1, Scalar(255), 1);
+
         //src_3 = 255 - src_3;
         resize(src_3, src_4, Size(img_w, img_h));
 

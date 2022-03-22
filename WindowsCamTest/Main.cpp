@@ -60,7 +60,7 @@ int g_para2 = 0;
 int g_para3 = 0;
 
 // global image save 
-std::string g_file_path = "E:\\Data\\CameraImages\\20220318";
+std::string g_file_path = "E:\\Data\\CameraImages\\20220322";
 bool g_b_save = false;
 bool g_b_async_save = false;
 bool g_b_preview = false;
@@ -101,6 +101,10 @@ float g_progress = 0;
 // start time
 std::chrono::steady_clock::time_point g_time_start = std::chrono::steady_clock::now();
 
+// mutex
+std::mutex g_img_plot_mutex;
+
+
 void ClearVector(std::vector<float>& inVector) {
     std::vector<float> init_vector;
     inVector.swap(init_vector);
@@ -133,6 +137,44 @@ float VectorAverage(const std::vector<float>& v) {
     avg /= v.size();
     return avg;
 }
+
+void GetImageAsync(NativeCamera* in_camera) {
+    
+    int id = 0;
+    int second = 0;
+    std::string old_time_str;
+    struct tm time_info;
+    time_t raw_time;
+    auto time_now = std::chrono::steady_clock::now();
+    if (in_camera->Init()) {
+        in_camera->SetParas(320, 480, 160, 170, 2000);
+        in_camera->StartCapture();
+    }
+    while (true) {
+        {
+            if (std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - time_now).count() > 1000) {
+                time_now = std::chrono::steady_clock::now();
+                time(&raw_time);
+                localtime_s(&time_info, &raw_time);
+                char time_info_buffer[100];
+                strftime(time_info_buffer, 100, "%G_%m_%d_%H%M%S", &time_info);
+                if (std::string(time_info_buffer) != old_time_str)
+                {
+                    old_time_str = std::string(time_info_buffer);
+                    //std::lock_guard<std::mutex> guard(g_img_plot_mutex);
+                    g_img_per_second_array.push_back(g_img_per_second);
+                    g_second_array.push_back(second);
+                    second++;
+                    g_img_per_second = 0;
+                }
+                if (in_camera->SaveImages(id, second, std::string(time_info_buffer), g_b_save)) {
+                    g_img_per_second++;
+                }
+            }
+        }
+    }
+}
+
 void SaveImageAsync(NativeCamera* in_camera) {
 
     int cell_per_second1 = 0;
@@ -394,18 +436,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // Native camera
     NativeCamera* camera = new NativeCamera(g_LogWindow, g_detect_class_num, g_detect_preview_num);
-    if (camera->Init()) {
-        camera->SetParas(atoi(img_width_cstr), atoi(img_height_cstr), atoi(img_offset_x_cstr), atoi(img_exposure_cstr), atoi(img_acquisition_frame_rate_cstr));
-    }
+    //if (camera->Init()) {
+    //    camera->SetParas(atoi(img_width_cstr), atoi(img_height_cstr), atoi(img_offset_x_cstr), atoi(img_exposure_cstr), atoi(img_acquisition_frame_rate_cstr));
+    //}
 
-    std::thread thread_save_img = std::thread(SaveImageAsync, camera);
+    //std::thread thread_save_img = std::thread(SaveImageAsync, camera);
+    std::thread thread_save_img = std::thread(GetImageAsync, camera);
     thread_save_img.detach();
-    if (camera->SaveAsync()) {
-        std::thread thread_save_image = std::thread([](NativeCamera* in_camera) {
-            in_camera->SaveImageFromQueue();
-            }, camera);
-        thread_save_image.detach();
-    }
+    //if (camera->SaveAsync()) {
+    //    std::thread thread_save_image = std::thread([](NativeCamera* in_camera) {
+    //        in_camera->SaveImageFromQueue();
+    //        }, camera);
+    //    thread_save_image.detach();
+    //}
 
     // laser controlg_b_preview
     std::string serial_name = "\\\\.\\COM4";
@@ -418,6 +461,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     ImVec4 orange_color = ImVec4(1.0, 0.43, 0.35, 1.0);
     ImVec4 green_color = ImVec4(0.43, 1.0, 0.35, 1.0);
     ImVec4 progress_bar_color = orange_color;
+
+    // 
+    int target_img_num = 5000;
+    bool b_able_analyze = true;
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -521,12 +568,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             ImGui::Separator();
             //ImGui::PushItemWidth(-FLT_MIN);
-
+            if (g_progress > 0.99) {
+                progress_bar_color = green_color;
+            }
             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, progress_bar_color);
             if (b_start) {
-                g_progress = (static_cast<float>(g_second)) / (volume_array[volume_current] / speed_array[speed_current_elem] * 60);
+                //g_progress = (static_cast<float>(g_second)) / (volume_array[volume_current] / speed_array[speed_current_elem] * 60);
+                g_progress = camera->GetTotalImageSize()/float(target_img_num);
             }
             ImGui::ProgressBar(g_progress, ImVec2(current_region_width * 1.0f, 20));
+            ImGui::ProgressBar(camera->GetAnalyzeProgress(), ImVec2(current_region_width * 1.0f, 20));
             ImGui::PopStyleColor(1);
             //ImGui::BeginGroup();
             {
@@ -535,9 +586,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     g_time_start = std::chrono::steady_clock::now();
                     b_screenshot = true;
                     b_start = true;
-                    progress_bar_color = orange_color;
                     g_progress = 0.0;
                     ClearPlot();
+                    b_able_analyze = true;
                 }
                 if (ImGui::IsItemHovered()) {
                     char tip_buffer[100];
@@ -547,9 +598,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 //ImGui::EndGroup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Stop", ImVec2(current_region_width * 0.5f, 40))) {
+            if (camera->GetTotalImageSize() > target_img_num || ImGui::Button("Stop", ImVec2(current_region_width * 0.5f, 40))) {
                 b_start = false;
-                g_progress = 0.0;
+                //g_progress = 0.0;
                 g_flow->StopCollect();
             }
 
@@ -576,15 +627,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     g_file_path = unicode2string(szFile);
                 }
                 else {
-                    g_file_path = "E:\\Data\\CameraImages\\20220318";     //默认地址
+                    //g_file_path = "E:\\Data\\CameraImages\\20220318";     //默认地址
                 }
             }
 
 
             //save path
-            if (b_start &&
-                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - g_time_start).count() > 45000 &&
-                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - g_time_start).count() < (45000 + 180000)) {
+            if (g_function_type == 60 && g_para1 == 1) {
                 b_save = true;
             }
             else {
@@ -604,7 +653,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             // auto stop
             if (g_progress > 0.99 && b_start == true) {
                 g_progress = 1.0;
-                progress_bar_color = green_color;
                 b_start = false;
             }
 
@@ -633,6 +681,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             if (ImGui::Button("clear plot")) {
                 ClearPlot();
             }
+
+            // analyze
+            if (ImGui::Button("analyze") || (b_able_analyze && g_progress > 0.99)) {
+                std::thread thread_analyze(&NativeCamera::AnalyzeImages,camera,"1",g_file_path);
+                thread_analyze.detach();
+                b_able_analyze = false;
+            }
+
             ImGui::End();
         }
         // preview window
@@ -647,6 +703,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             ImGui::Begin("Statis", NULL, window_flags);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
             // plot data prepare
 
+            //std::lock_guard<std::mutex> guard(g_img_plot_mutex);
             std::vector<float> cell_per_second_avg_list(g_second_array.size(), g_cell_per_second_avg);
             std::vector<float> img_per_second_avg_list(g_second_array.size(), g_img_per_second_avg);
             // begin plot
@@ -654,7 +711,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             static float rratios[] = { 1,1 };
             static float cratios[] = { 1,1,1 };
             if (ImPlot::BeginSubplots("My Subplots", 3, 2, ImVec2(-1, -1), flags, rratios, cratios)) {
-                if (ImPlot::BeginPlot("")) {
+ /*               if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotLine("cell per second", g_second_array.data(), g_cell_per_second_array.data(), g_second_array.size());
@@ -668,21 +725,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotLine("cell total", g_second_array.data(), g_cell_total_array.data(), g_second_array.size());
                     ImPlot::EndPlot();
-                }
+                }*/
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotLine("img per second", g_second_array.data(), g_img_per_second_array.data(), g_second_array.size());
-                    ImPlot::PlotLine("avg", g_second_array.data(), g_img_avg_history_array.data(), g_second_array.size());
+                    //ImPlot::PlotLine("avg", g_second_array.data(), g_img_avg_history_array.data(), g_second_array.size());
                     ImPlot::EndPlot();
-                }
+                }/*
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotLine("cell per img", g_second_array.data(), g_cell_per_img_array.data(), g_second_array.size());
                     ImPlot::EndPlot();
                 }
-
+                */
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes("diameter(um)", "perimeter(um)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
@@ -696,6 +753,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImPlot::PlotScatter("", g_cell_dia_array.data(), g_cell_area_array.data(), g_cell_dia_array.size());
                     ImPlot::EndPlot();
                 }
+                if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes("diameter(um)", "", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PlotHistogram("", g_cell_dia_array.data(), g_cell_dia_array.size(), 200);
+                    ImPlot::EndPlot();
+                }
+                if (camera->GetTotalImageSize() == 0 && g_cell_dia_array.size() == 0) {
+                    auto total_cells = camera->GetTotalCells();
+                    for (int i = 0; i < total_cells.size(); i++) {
+                        g_cell_dia_array.push_back(total_cells[i].m_radius * 2);
+                        g_cell_area_array.push_back(total_cells[i].m_area);
+                        g_cell_peri_array.push_back(total_cells[i].m_perimeter);
+                        if(i > target_img_num) break;
+                    }
+                    
+                    
+                }
+                
 
                 /*ImGui::PlotLines("Frame Times", arr, IM_ARRAYSIZE(arr));*/
                 /*ImGui::PlotHistogram("Histogram", arr, IM_ARRAYSIZE(arr), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80.0f));*/
@@ -760,6 +835,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::Text("g_progress %f", g_progress);
                     ImGui::Text("b screenshot %d", b_screenshot);
                     ImGui::Text("b start %d", b_start);
+                    ImGui::Text("g b save %d", g_b_save);
+                    ImGui::Text("b save %d", b_save);
+                    ImGui::Text("total images %d", camera->GetTotalImageSize());
                     ImGui::Separator();
                     ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
                     ImGui::Separator();
@@ -867,16 +945,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         g_flow->Maintain((int)8);
                     }
                     if (ImGui::Button("EmptyCompleteMachine", ImVec2(200, 25))) {
-                        g_flow->Maintain((int)10);
-                    }
-                    if (ImGui::Button("PrimeCompleteMachine", ImVec2(200, 25))) {
                         g_flow->Maintain((int)11);
                     }
-                    if (ImGui::Button("ChangeSheethFluid", ImVec2(200, 25))) {
+                    if (ImGui::Button("PrimeCompleteMachine", ImVec2(200, 25))) {
                         g_flow->Maintain((int)12);
                     }
-                    if (ImGui::Button("ChangeCleanFluid", ImVec2(200, 25))) {
+                    if (ImGui::Button("ChangeSheethFluid", ImVec2(200, 25))) {
                         g_flow->Maintain((int)13);
+                    }
+                    if (ImGui::Button("ChangeCleanFluid", ImVec2(200, 25))) {
+                        g_flow->Maintain((int)14);
                     }
                     ImGui::EndTabItem();
                 }

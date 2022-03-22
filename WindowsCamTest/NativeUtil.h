@@ -381,8 +381,8 @@ static int32_t GENICAM_CreateStreamSource(GENICAM_Camera* pGetCamera, GENICAM_St
 static int32_t GENICAM_startGrabbing(GENICAM_StreamSource* pStreamSource) {
 	int32_t isStartGrabbingSuccess;
 	GENICAM_EGrabStrategy eGrabStrategy;
-	//eGrabStrategy = grabStrartegySequential;
-	eGrabStrategy = grabStrartegyLatestImage;
+	eGrabStrategy = grabStrartegySequential;
+	//eGrabStrategy = grabStrartegyLatestImage;
 	isStartGrabbingSuccess = pStreamSource->startGrabbing(pStreamSource, 0, eGrabStrategy);
 	if (isStartGrabbingSuccess != 0) {
 		printf("StartGrabbing  fail.\n");
