@@ -42,9 +42,9 @@ struct LogWindows
                 LineOffsets.push_back(old_size + 1);
     }
 
-    void    Draw(const char* title, bool* p_open = NULL)
+    void    Draw(const char* title, bool* p_open = NULL, ImGuiWindowFlags flags = 0)
     {
-        if (!ImGui::Begin(title, p_open))
+        if (!ImGui::Begin(title, p_open, flags))
         {
             ImGui::End();
             return;

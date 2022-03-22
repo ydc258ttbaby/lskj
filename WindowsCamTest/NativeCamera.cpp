@@ -1,18 +1,24 @@
 #include "NativeCamera.h"
-NativeCamera::NativeCamera()
+NativeCamera::NativeCamera(LogWindows* pLogWindow,int in_class_num,int in_detect_image_preview_num)
 {
+	m_class_num = in_class_num;
+	m_detect_image_preview_num = in_detect_image_preview_num;
 	pStreamSource = NULL;
 	m_celldetect = CellDetect();
+	detect_images = std::vector<std::queue<cv::Mat>>(m_class_num,std::queue<cv::Mat>());
+	m_log_window = pLogWindow;
 }
-
+NativeCamera::NativeCamera() {
+}
 NativeCamera::~NativeCamera()
 {
 }
 bool NativeCamera::SetParas(int inWidth,int inHeight,int inOffsetX,double inExposureTime,double inAcquisitionFrameRate) {
 	if (pCamera != NULL) {
 		return (
-		modifyCameraOffsetX(pCamera, inOffsetX) == 0 &&
+		modifyCameraOffsetX(pCamera, 0) == 0 &&
 		modifyCameraWidth(pCamera, inWidth) == 0 &&
+		modifyCameraOffsetX(pCamera, inOffsetX) == 0 &&
 		modifyCameraHeight(pCamera, inHeight) == 0 &&
 		modifyCameraExposureTime(pCamera, inExposureTime) == 0 &&
 		modifyCameraAcquisitionFrameRate(pCamera, inAcquisitionFrameRate) == 0
@@ -130,6 +136,25 @@ cv::Mat NativeCamera::OperateImageQueue(cv::Mat inImage,bool bInsert) {
 	return cv::Mat();
 }
 
+std::vector<cv::Mat> NativeCamera::OperateDetectImageQueue(cv::Mat inImage, bool bInsert, int in_class_index) {
+	std::lock_guard<std::mutex> guard(detect_images_mutex);
+	std::vector<cv::Mat> res;
+	if (bInsert) {
+		//std::cout << "insert " << std::endl;
+		detect_images.at(in_class_index).push(inImage);
+		while (detect_images[in_class_index].size() > m_detect_image_preview_num) {
+			detect_images[in_class_index].pop();
+		}
+	}
+	else {
+		//std::cout << "get  " << std::endl;
+		while (!detect_images.at(in_class_index).empty()) {
+			res.push_back(detect_images[in_class_index].back());
+			detect_images[in_class_index].pop();
+		}
+	}
+	return res;
+}
 
 
 
@@ -184,93 +209,118 @@ bool NativeCamera::Init()
 	return true;
 }
 bool NativeCamera::BSaveValid() {
-	std::lock_guard<std::mutex> guard(steamsource_mutex);
+	//std::lock_guard<std::mutex> guard(steamsource_mutex);
 	return pStreamSource == NULL? false:true;
 }
-void creatAlphaMat(cv::Mat& mat) // 创建一个图像
+void createAlphaMat(cv::Mat& mat) // 创建一个图像
 {
 	int randNum = rand() % UCHAR_MAX;
 	for (int i = 0; i < mat.rows; i++)
 	{
 		for (int j = 0; j < mat.cols; j++)
 		{
-			mat.at<uchar>(i, j) = (randNum + 10*i + j)%UCHAR_MAX;
+			mat.at<uchar>(i, j) = (randNum + 100*i + j)%UCHAR_MAX;
 		}
 	}
 }
 
-int NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSavePath) {
+std::vector<CellInfo> NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSaveName, const std::string inSaveRootPath) {
 	int cellNum = 0;
+	std::vector<CellInfo> cellInfos;
 	m_bSave = bSave;
 	auto time_start = std::chrono::system_clock::now();
-	bool bPreview = false;
-	if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - timeOld).count() > image_preview_interval) {
-		bPreview = true;
-		timeOld = std::chrono::system_clock::now();
+	bool b_time_to_preview = false;
+	if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - m_time_old).count() > image_preview_interval) {
+		b_time_to_preview = true;
+		m_time_old = std::chrono::system_clock::now();
 	}
-	if (bSave || bPreview) {
-		int32_t ret = -1;
+	if (bSave || b_time_to_preview) {
+
+		int32_t ret = 0;
 		uint64_t blockId = 0;
 		GENICAM_Frame* pFrame;
 		std_time ts = std::chrono::system_clock::now();
-		{
-			std::lock_guard<std::mutex> guard(steamsource_mutex);
-			if (NULL == pStreamSource) {
-				m_log_window->AddLog("pstream source is NULL");
-				return cellNum;
-			}
-			ret = pStreamSource->getFrame(pStreamSource, &pFrame, 1);
-			if (ret < 0) {
-				m_log_window->AddLog("getFrame  fail.\n");
-				//getchar();
-				return cellNum;
-			}
-		}
-		ret = pFrame->valid(pFrame);
-		if (ret < 0) {
-			m_log_window->AddLog("frame is invalid!\n");
-			pFrame->release(pFrame);
-			return cellNum;
-		}
-		cv::Mat image = cv::Mat(pFrame->getImageHeight(pFrame),
-			pFrame->getImageWidth(pFrame),
-			CV_8U,
-			(uint8_t*)((pFrame->getImage(pFrame)))
-		);
-		std::vector<cv::Mat> cellImages = m_celldetect.getResult(image);
-		//std::cout << inSavePath.substr(0, inSavePath.size()-4) << std::endl;
-		int i = 1000;
-		//std::string elePath = inSavePath.substr(0, inSavePath.size() - 4) + std::to_string(i) + ".bmp";
-		//std::cout << elePath << std::endl;
-		cellNum = cellImages.size();
 
-		for (int i = 0; i < cellImages.size(); i++) {
-			std::string elePath = inSavePath.substr(0,inSavePath.size()-4)+std::to_string(i) + ".bmp";
-			//std::cout << elePath << std::endl;
-			cv::imwrite(elePath,cellImages[i]);
-			//printf("path %s \n",elePath.c_str());
-		}
-		if (bPreview) {
-			OperateImageQueue(image.clone(), true);
-		}
-		if (bSave) {
-			if (bSaveAsync) {
-				InsertImageQueue(image.clone(), inSavePath);
+		{
+			//std::lock_guard<std::mutex> guard(steamsource_mutex);
+			if (NULL == pStreamSource)
+			{
+				//m_log_window->AddLog("pstream source is NULL \n");
+				//Sleep(100);
+				//this->StopCapture();
+				//this->StartCapture();
+				//if (NULL == pStreamSource) 
+			return cellInfos;
+				//else
+				//	m_log_window->AddLog("pstream source is good \n");
+
 			}
 			else {
-				//cv::imwrite(inSavePath, image);
+				if (pStreamSource != NULL) {
+					ret = pStreamSource->getFrame(pStreamSource, &pFrame, 1);
+					if (ret < 0) {
+						m_log_window->AddLog("getFrame  fail.\n");
+						this->StopCapture();
+						Sleep(100);
+						this->StartCapture();
+						//getchar();
+						return cellInfos;
+					}
+
+					ret = pFrame->valid(pFrame);
+					if (ret < 0) {
+						m_log_window->AddLog("frame is invalid!\n");
+						pFrame->release(pFrame);
+						return cellInfos;
+					}
+					cv::Mat image = cv::Mat(pFrame->getImageHeight(pFrame),
+						pFrame->getImageWidth(pFrame),
+						CV_8U,
+						(uint8_t*)((pFrame->getImage(pFrame)))
+					);
+					cellInfos = m_celldetect.GetResult(image);
+
+					
+					cellNum = cellInfos.size();
+
+					if (bSave) {
+						for (int i = 0; i < cellInfos.size(); i++) {
+							std::filesystem::path real_save_root_path = std::filesystem::path(inSaveRootPath + "_" + std::to_string(Classify(cellInfos[i].m_image)));
+							if (!std::filesystem::is_directory(real_save_root_path)) {
+								std::filesystem::create_directories(real_save_root_path);
+							}
+							real_save_root_path /= std::filesystem::path(inSaveName.substr(0, inSaveName.size() - 4) + std::to_string(i) + ".bmp");
+							//cv::imwrite(real_save_root_path.string(), cellInfos[i].m_image);
+						}
+					}
+					if (b_time_to_preview) {
+						OperateImageQueue(image.clone(), true);
+						for (int i = 0; i < cellInfos.size(); i++) {
+							OperateDetectImageQueue(cellInfos[i].m_image.clone(), true, Classify(cellInfos[i].m_image));
+						}
+					}
+					if (bSave) {
+						if (bSaveAsync) {
+							InsertImageQueue(image.clone(), (std::filesystem::path(inSaveRootPath) / std::filesystem::path(inSaveName)).string());
+						}
+						else {
+							//cv::imwrite((std::filesystem::path(inSaveRootPath)/std::filesystem::path(inSaveName)).string(), image);
+						}
+					}
+					image.release();
+					pFrame->release(pFrame);
+				}
 			}
 		}
-		image.release();
-		pFrame->release(pFrame);
 	}
-	
-	return cellNum;
+	return cellInfos;
 }
+
 bool NativeCamera::SaveAsync() {
 	return true;
 	return m_bSaveAsync;
 }
-NativeCamera::NativeCamera(LogWindows* pLogWindow) {
-	m_log_window = pLogWindow;
+int NativeCamera::Classify(cv::Mat in_image) {
+	// to do: classify 
+	return 0;
 }
