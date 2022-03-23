@@ -284,22 +284,22 @@ std::vector<CellInfo> NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const 
 					
 					cellNum = cellInfos.size();
 
-					if (bSave) {
-						for (int i = 0; i < cellInfos.size(); i++) {
-							std::filesystem::path real_save_root_path = std::filesystem::path(inSaveRootPath + "_" + std::to_string(Classify(cellInfos[i].m_image)));
-							if (!std::filesystem::is_directory(real_save_root_path)) {
-								std::filesystem::create_directories(real_save_root_path);
-							}
-							real_save_root_path /= std::filesystem::path(inSaveName.substr(0, inSaveName.size() - 4) + std::to_string(i) + ".bmp");
-							//cv::imwrite(real_save_root_path.string(), cellInfos[i].m_image);
-						}
-					}
-					if (b_time_to_preview) {
-						OperateImageQueue(image.clone(), true);
-						for (int i = 0; i < cellInfos.size(); i++) {
-							OperateDetectImageQueue(cellInfos[i].m_image.clone(), true, Classify(cellInfos[i].m_image));
-						}
-					}
+					//if (bSave) {
+					//	for (int i = 0; i < cellInfos.size(); i++) {
+					//		std::filesystem::path real_save_root_path = std::filesystem::path(inSaveRootPath + "_" + std::to_string(Classify(cellInfos[i].m_image)));
+					//		if (!std::filesystem::is_directory(real_save_root_path)) {
+					//			std::filesystem::create_directories(real_save_root_path);
+					//		}
+					//		real_save_root_path /= std::filesystem::path(inSaveName.substr(0, inSaveName.size() - 4) + std::to_string(i) + ".bmp");
+					//		//cv::imwrite(real_save_root_path.string(), cellInfos[i].m_image);
+					//	}
+					//}
+					//if (b_time_to_preview) {
+					//	OperateImageQueue(image.clone(), true);
+					//	for (int i = 0; i < cellInfos.size(); i++) {
+					//		OperateDetectImageQueue(cellInfos[i].m_image.clone(), true, Classify(cellInfos[i].m_image));
+					//	}
+					//}
 					if (bSave) {
 						if (bSaveAsync) {
 							InsertImageQueue(image.clone(), (std::filesystem::path(inSaveRootPath) / std::filesystem::path(inSaveName)).string());
@@ -321,9 +321,17 @@ bool NativeCamera::SaveAsync() {
 	return true;
 	return m_bSaveAsync;
 }
-int NativeCamera::Classify(cv::Mat in_image) {
+int NativeCamera::Classify(double inDia) {
 	// to do: classify 
-	return 0;
+	if (inDia <=5) {
+		return 0;
+	}
+	else if (5 < inDia && inDia < 15)
+	{
+		return 1;
+	}
+
+	return 2;
 }
 bool NativeCamera::SaveImages(int inId, int inSecond, const std::string inName, bool inBSave) {
 
@@ -395,7 +403,7 @@ void NativeCamera::AnalyzeImages(const std::string inSampleName, const std::stri
 			CellInfo cell_info = cellInfos[j];
 			cell_info.m_second = m_total_images[i].m_second;
 			cell_info.m_id = cell_id;
-			cell_info.m_class = Classify(cell_info.m_image);
+			cell_info.m_class = Classify(cell_info.m_diameter);
 			cell_info.m_name = inSampleName + "_" + std::to_string(cell_id) + "_" + std::to_string(cell_info.m_class) + "_" + m_total_images[i].m_name + ".bmp";
 			m_total_cells.push_back(cell_info);
 			cell_id++;
@@ -405,10 +413,11 @@ void NativeCamera::AnalyzeImages(const std::string inSampleName, const std::stri
 				std::filesystem::create_directories(root_path);
 			}
 			std::filesystem::path save_path = root_path /std::filesystem::path(cell_info.m_name);
-			m_log_window->AddLog("save img in %s \n", save_path.string().c_str());
+			cell_info.m_path = save_path.string();
+			//m_log_window->AddLog("save img in %s \n", save_path.string().c_str());
 			cv::imwrite(save_path.string(),cell_info.m_image);
 		}
-		//std::filesystem::path root_path = std::filesystem::path(inRootPath) / std::filesystem::path(std::to_string(1));
+		//std::filesystem::path root_path = std::filesystem::path(inRootPath) / std::filesystem::path(std::to_string("raw"));
 		//if (!std::filesystem::exists(root_path)) {
 		//	std::filesystem::create_directories(root_path);
 		//}
@@ -425,7 +434,13 @@ int NativeCamera::GetTotalImageSize() {
 	return m_total_images.size();
 }
 std::vector<CellInfo> NativeCamera::GetTotalCells() {
-	std::vector<CellInfo> temp;
-	m_total_cells.swap(temp);
-	return temp;
+	return m_total_cells;
+}
+void NativeCamera::Clear() {
+	std::vector<CellInfo> temp_cell_infos;
+	std::vector<ImageInfo> temp_images;
+	m_total_cells.swap(temp_cell_infos);
+	m_total_images.swap(temp_images);
+	m_analyze_progress = 0.0;
+
 }

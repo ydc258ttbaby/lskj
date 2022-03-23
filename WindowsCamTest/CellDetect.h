@@ -17,16 +17,19 @@
 #include <vector>
 
 
+#define UM_PER_PIXEL 0.13824
+#define UM_2_PER_PIXEL 0.01911
 using namespace std;
 using namespace cv;
 struct CellInfo {
     cv::Mat m_image;
-    float m_area;
-    float m_perimeter;
-    float m_radius;
+    double m_area;
+    double m_perimeter;
+    double m_diameter;
     int m_id;
     int m_second;
     std::string m_name;
+    std::string m_path;
     int m_class;
 };
 struct ImageInfo {
@@ -40,7 +43,7 @@ class CellDetect
 private :
     int width = 100, height = 100;
     int img_w = 320, img_h = 480;
-    float beta = 0.2;
+    float beta = 0.5;
 public:
 
     std::vector<cv::Mat> CellDetect_ROI(std::vector<cv::Point2f> centroid, cv::Mat& src) 
@@ -112,9 +115,8 @@ public:
             cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE, Point(0, 0));  //寻找轮廓
         for (unsigned int i = 0; i < contours_big_img.size(); ++i)
         {
-            float cell_area = contourArea(contours_big_img[i]);          //求细胞面积
-            if (cell_area < 300 || cell_area>100000)
-                continue;
+            float cell_area = contourArea(contours_big_img[i]) * UM_2_PER_PIXEL;          //求细胞面积
+
             RotatedRect rectPoint = minAreaRect(contours_big_img[i]);
             if (rectPoint.center.x - width / 2 <= 0)
                 rectPoint.center.x = width / 2 + 1;
@@ -126,14 +128,16 @@ public:
                 rectPoint.center.y = img_h - 1 - height / 2;
 
             cv::Mat roiImg = src(Rect(rectPoint.center.x - width / 2, rectPoint.center.y - height / 2, width, height));
-            float cell_peri = arcLength(contours_big_img[i], true);     //求细胞周长
+            float cell_peri = arcLength(contours_big_img[i], true) * UM_PER_PIXEL;     //求细胞周长
+            if (cell_peri > 15.0)
+                continue;
             cv::Point2f center;
             float cell_rad;
             minEnclosingCircle(contours_big_img[i], center, cell_rad);     //求细胞最小外接圆直径
-
-            res.push_back({roiImg, cell_area, cell_peri, cell_rad});
+            res.push_back({roiImg, cell_area, cell_peri, cell_rad* UM_PER_PIXEL*2 });
         }
         return res;
+
 
     }
     std::vector<cv::Mat> getResult(cv::Mat src)     //分割细胞图片

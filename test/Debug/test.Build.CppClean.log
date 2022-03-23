@@ -2,8 +2,8 @@ e:\code\c\lskj\test\debug\vc142.pdb
 e:\code\c\lskj\test\debug\vc142.idb
 e:\code\c\lskj\test\debug\application.obj
 e:\code\c\lskj\test\debug\celldetect.obj
-e:\code\c\lskj\windowscamtest\debug\test.ilk
 e:\code\c\lskj\windowscamtest\debug\test.exe
+e:\code\c\lskj\windowscamtest\debug\test.ilk
 e:\code\c\lskj\windowscamtest\debug\test.pdb
 e:\code\c\lskj\windowscamtest\debug\opencv_cored.dll
 e:\code\c\lskj\windowscamtest\debug\zlibd1.dll
@@ -14,6 +14,8 @@ e:\code\c\lskj\windowscamtest\debug\webpd.dll
 e:\code\c\lskj\windowscamtest\debug\libpng16d.dll
 e:\code\c\lskj\windowscamtest\debug\tiffd.dll
 e:\code\c\lskj\windowscamtest\debug\liblzma.dll
+e:\code\c\lskj\windowscamtest\debug\opencv_highguid.dll
+e:\code\c\lskj\windowscamtest\debug\opencv_videoiod.dll
 e:\code\c\lskj\test\debug\test.tlog\cl.command.1.tlog
 e:\code\c\lskj\test\debug\test.tlog\cl.read.1.tlog
 e:\code\c\lskj\test\debug\test.tlog\cl.write.1.tlog

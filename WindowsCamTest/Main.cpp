@@ -49,8 +49,7 @@
 #endif
 
 
-#define UM_PER_PIXEL 0.13824
-#define UM_2_PER_PIXEL 0.01911
+
 
 // global flow
 IInterface* g_flow = NULL;
@@ -230,9 +229,9 @@ void SaveImageAsync(NativeCamera* in_camera) {
                     g_img_per_second += 1;
                     g_cell_per_second += cell_num;
                     for (int n = 0; n < cell_infos.size(); n++) {
-                        float cell_area = UM_2_PER_PIXEL * cell_infos[n].m_area;      //像素修正
-                        float cell_peri = UM_PER_PIXEL * cell_infos[n].m_perimeter;
-                        float cell_dia = UM_PER_PIXEL * 2.0 * cell_infos[n].m_radius;
+                        float cell_area = cell_infos[n].m_area;      //像素修正
+                        float cell_peri =cell_infos[n].m_perimeter;
+                        float cell_dia = cell_infos[n].m_diameter;
 
                         g_cell_area_array.push_back(cell_area);
                         g_cell_peri_array.push_back(cell_peri);
@@ -463,7 +462,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     ImVec4 progress_bar_color = orange_color;
 
     // 
-    int target_img_num = 5000;
+    int target_img_num = 6000;
     bool b_able_analyze = true;
 
     // Main loop
@@ -500,15 +499,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
         image_temp.release();
         // load detect image 
-        for (int i = 0; i < g_detect_class_num; i++) {
-            std::vector<cv::Mat> temp_images = camera->OperateDetectImageQueue(cv::Mat(), false, i);
-            for (int j = 0; j < temp_images.size(); j++) {
-                cv::Mat detect_img = GrayToRGB(temp_images[j]);
-                if (!detect_img.empty()) {
-                    LoadTextureFromImage(detect_img, &(g_detect_tex_ids[i][j]));
-                }
-            }
-        }
+        //for (int i = 0; i < g_detect_class_num; i++) {
+        //    std::vector<cv::Mat> temp_images = camera->OperateDetectImageQueue(cv::Mat(), false, i);
+        //    for (int j = 0; j < temp_images.size(); j++) {
+        //        cv::Mat detect_img = GrayToRGB(temp_images[j]);
+        //        if (!detect_img.empty()) {
+        //            LoadTextureFromImage(detect_img, &(g_detect_tex_ids[i][j]));
+        //        }
+        //    }
+        //}
 
         //std::cout << "camera num" << camera->GetDeviceNum() << std::endl;
         std::get<1>(info_v[Item_tv]) = volume_array[volume_current];
@@ -579,37 +578,31 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             ImGui::ProgressBar(g_progress, ImVec2(current_region_width * 1.0f, 20));
             ImGui::ProgressBar(camera->GetAnalyzeProgress(), ImVec2(current_region_width * 1.0f, 20));
             ImGui::PopStyleColor(1);
-            //ImGui::BeginGroup();
-            {
-                if (ImGui::Button("Start", ImVec2(current_region_width * 0.5f, 40))) {
-                    g_flow->CollectStart(std::get<1>(info_v[Item_tv]), std::get<1>(info_v[Item_s]), 0, std::get<1>(info_v[Item_py]), std::get<1>(info_v[Item_px]));
-                    g_time_start = std::chrono::steady_clock::now();
-                    b_screenshot = true;
-                    b_start = true;
-                    g_progress = 0.0;
-                    ClearPlot();
-                    b_able_analyze = true;
-                }
-                if (ImGui::IsItemHovered()) {
-                    char tip_buffer[100];
-                    sprintf(tip_buffer, "volume: %.0f \nspeed : %.0f \npos   : %.0f %.0f \n", std::get<1>(info_v[Item_tv]), std::get<1>(info_v[Item_s]), std::get<1>(info_v[Item_py]), std::get<1>(info_v[Item_px]));
-                    ImGui::SetTooltip(tip_buffer);
-                }
-                //ImGui::EndGroup();
-            }
-            ImGui::SameLine();
-            if (camera->GetTotalImageSize() > target_img_num || ImGui::Button("Stop", ImVec2(current_region_width * 0.5f, 40))) {
-                b_start = false;
-                //g_progress = 0.0;
-                g_flow->StopCollect();
-            }
-
-
             if (ImGui::Button("Box in/out", ImVec2(current_region_width * 0.5f, 40))) {
                 g_flow->OpenCloseDoor();
             }
-
             ImGui::SameLine();
+            if (ImGui::Button("Start", ImVec2(current_region_width * 0.5f, 40))) {
+                g_flow->CollectStart(std::get<1>(info_v[Item_tv]), std::get<1>(info_v[Item_s]), 0, std::get<1>(info_v[Item_py]), std::get<1>(info_v[Item_px]));
+                g_time_start = std::chrono::steady_clock::now();
+                b_screenshot = true;
+                b_start = true;
+                g_progress = 0.0;
+                ClearPlot();
+                b_able_analyze = true;
+                camera->Clear();
+                for (int i = 0; i < g_detect_tex_ids.size(); i++) {
+                    for (int j = 0; j < g_detect_tex_ids[0].size(); j++) {
+                        glDeleteTextures(1, &(g_detect_tex_ids[i][j]));
+                        g_detect_tex_ids[i][j] = 0;
+                    }
+                }
+            }
+            if (ImGui::IsItemHovered()) {
+                char tip_buffer[100];
+                sprintf(tip_buffer, "volume: %.0f \nspeed : %.0f \npos   : %.0f %.0f \n", std::get<1>(info_v[Item_tv]), std::get<1>(info_v[Item_s]), std::get<1>(info_v[Item_py]), std::get<1>(info_v[Item_px]));
+                ImGui::SetTooltip(tip_buffer);
+            }
             if (ImGui::Button("Open Path", ImVec2(current_region_width * 0.5f, 40)))
             {
                 BROWSEINFO ofn;
@@ -630,6 +623,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     //g_file_path = "E:\\Data\\CameraImages\\20220318";     //默认地址
                 }
             }
+            ImGui::SameLine();
+            if (ImGui::Button("Stop", ImVec2(current_region_width * 0.5f, 40)) || camera->GetTotalImageSize() > target_img_num ) {
+                b_start = false;
+                //g_progress = 0.0;
+                g_flow->StopCollect();
+            }
+
+
+            
+
+            
 
 
             //save path
@@ -655,8 +659,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 g_progress = 1.0;
                 b_start = false;
             }
+            // analyze
+            if (ImGui::Button("analyze", ImVec2(current_region_width * 0.3f, 30)) || (b_able_analyze && g_progress > 0.99)) {
+                std::thread thread_analyze(&NativeCamera::AnalyzeImages, camera, "1", g_file_path);
+                thread_analyze.detach();
+                b_able_analyze = false;
 
-            if (ImGui::Button("ScreenShot") || (g_progress > 0.99 && b_screenshot)) {
+            }
+            // Screen shot
+            ImGui::SameLine();
+            if (ImGui::Button("ScreenShot",  ImVec2(current_region_width * 0.3f, 30)) || (g_progress > 0.99 && b_screenshot)) {
                 cv::Mat img(nScreenHeight, nScreenWidth, CV_8UC3);
                 glPixelStorei(GL_PACK_ALIGNMENT, (img.step & 3) ? 1 : 4);
                 glPixelStorei(GL_PACK_ROW_LENGTH, img.step / img.elemSize()); // 这句不加好像也没问题？
@@ -678,17 +690,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 }
             }
             // clear plot
-            if (ImGui::Button("clear plot")) {
+            ImGui::SameLine();
+            if (ImGui::Button("clear plot", ImVec2(current_region_width * 0.3f, 30))) {
                 ClearPlot();
             }
 
-            // analyze
-            if (ImGui::Button("analyze") || (b_able_analyze && g_progress > 0.99)) {
-                std::thread thread_analyze(&NativeCamera::AnalyzeImages,camera,"1",g_file_path);
-                thread_analyze.detach();
-                b_able_analyze = false;
-            }
-
+            
             ImGui::End();
         }
         // preview window
@@ -710,7 +717,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             static ImPlotSubplotFlags flags = ImPlotSubplotFlags_NoTitle;
             static float rratios[] = { 1,1 };
             static float cratios[] = { 1,1,1 };
-            if (ImPlot::BeginSubplots("My Subplots", 3, 2, ImVec2(-1, -1), flags, rratios, cratios)) {
+            if (ImPlot::BeginSubplots("My Subplots", 2, 2, ImVec2(-1, -1), flags, rratios, cratios)) {
  /*               if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
@@ -760,12 +767,37 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImPlot::EndPlot();
                 }
                 if (camera->GetTotalImageSize() == 0 && g_cell_dia_array.size() == 0) {
-                    auto total_cells = camera->GetTotalCells();
+                    std::vector<CellInfo> total_cells = camera->GetTotalCells();
                     for (int i = 0; i < total_cells.size(); i++) {
-                        g_cell_dia_array.push_back(total_cells[i].m_radius * 2);
+                        g_cell_dia_array.push_back(total_cells[i].m_diameter);
                         g_cell_area_array.push_back(total_cells[i].m_area);
                         g_cell_peri_array.push_back(total_cells[i].m_perimeter);
-                        if(i > target_img_num) break;
+                        if(i > 10000) break;
+                    }
+                    std::vector cell_class_num(g_detect_class_num,0);
+                    for (int i = 0; i < total_cells.size(); i++) {
+                        int cell_class = total_cells[i].m_class;
+                        cv::Mat detect_img = GrayToRGB(total_cells[i].m_image);
+                        if (!detect_img.empty() && cell_class_num[cell_class] < g_detect_preview_num) {
+                            LoadTextureFromImage(detect_img, &(g_detect_tex_ids[cell_class][cell_class_num[cell_class]]));
+                            cell_class_num[cell_class]++;
+                        }
+                        int num_sum = 0;
+                        for (int num : cell_class_num) {
+                            num_sum += num;
+                        }
+                        if (num_sum >= g_detect_class_num * (g_detect_preview_num - 1)) {
+                            break;
+                        }
+                    }
+                    for (int i = 0; i < g_detect_class_num; i++) {
+                        std::vector<cv::Mat> temp_images = camera->OperateDetectImageQueue(cv::Mat(), false, i);
+                        for (int j = 0; j < temp_images.size(); j++) {
+                            cv::Mat detect_img = GrayToRGB(temp_images[j]);
+                            if (!detect_img.empty()) {
+                                LoadTextureFromImage(detect_img, &(g_detect_tex_ids[i][j]));
+                            }
+                        }
                     }
                     
                     
@@ -785,7 +817,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             for (int i = 0; i < g_detect_class_num; i++) {
                 std::string btn_text = "class " + std::to_string(i);
                 if (ImGui::Button(btn_text.c_str(), ImVec2(100, 100))) {
-                    std::string path = g_file_path + "_" + std::to_string(i);
+                    std::string path = g_file_path + "\\" + std::to_string(i);
                     if (std::filesystem::exists(std::filesystem::path(path))) {
                         system(("start " + std::string(path)).c_str());
                     }
@@ -838,10 +870,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::Text("g b save %d", g_b_save);
                     ImGui::Text("b save %d", b_save);
                     ImGui::Text("total images %d", camera->GetTotalImageSize());
+                    ImGui::Text("total cell %d", camera->GetTotalCells().size());
                     ImGui::Separator();
                     ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
                     ImGui::Separator();
-                    ImGui::Text("cell %d", g_cell_area_array.size());
                     ImGui::EndTabItem();
                 }
                 // properties tab

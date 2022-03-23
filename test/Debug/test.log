@@ -1,5 +1,6 @@
 ﻿  CellDetect.cpp
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(52,84): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(45,16): warning C4305: “初始化”: 从“double”到“float”截断
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(54,84): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
@@ -8,7 +9,7 @@ E:\code\C\lskj\WindowsCamTest\CellDetect.h(52,84): warning C4244: “参数”: 
           [
               _Tp=int
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(52,57): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(54,57): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
@@ -17,49 +18,49 @@ E:\code\C\lskj\WindowsCamTest\CellDetect.h(52,57): warning C4244: “参数”: 
           [
               _Tp=int
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(68,21): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(73,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(70,21): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(75,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(75,46): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(77,46): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(77,49): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(79,49): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(79,46): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(81,46): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(115,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(120,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
-          with
-          [
-              _Tp=float
-          ]
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(117,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
 E:\code\C\lskj\WindowsCamTest\CellDetect.h(122,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(124,49): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(124,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(126,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(126,49): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,90): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+          with
+          [
+              _Tp=float
+          ]
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(130,90): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
@@ -68,7 +69,7 @@ E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,90): warning C4244: “参数”:
           [
               _Tp=int
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,58): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(130,58): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
@@ -77,11 +78,12 @@ E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,58): warning C4244: “参数”:
           [
               _Tp=int
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(129,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(198,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(201,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(131,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(200,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(203,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
   Application.cpp
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(52,84): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(45,16): warning C4305: “初始化”: 从“double”到“float”截断
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(54,84): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
@@ -90,7 +92,7 @@ E:\code\C\lskj\WindowsCamTest\CellDetect.h(52,84): warning C4244: “参数”: 
           [
               _Tp=int
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(52,57): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(54,57): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
@@ -99,49 +101,49 @@ E:\code\C\lskj\WindowsCamTest\CellDetect.h(52,57): warning C4244: “参数”: 
           [
               _Tp=int
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(68,21): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(73,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(70,21): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(75,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(75,46): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(77,46): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(77,49): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(79,49): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(79,46): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(81,46): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(115,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(120,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
-          with
-          [
-              _Tp=float
-          ]
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(117,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
 E:\code\C\lskj\WindowsCamTest\CellDetect.h(122,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(124,49): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(124,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(126,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(126,49): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,90): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,48): warning C4244: “=”: 从“int”转换到“_Tp”，可能丢失数据
+          with
+          [
+              _Tp=float
+          ]
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(130,90): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
@@ -150,7 +152,7 @@ E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,90): warning C4244: “参数”:
           [
               _Tp=int
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,58): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(130,58): warning C4244: “参数”: 从“_Tp”转换到“_Tp”，可能丢失数据
           with
           [
               _Tp=float
@@ -159,9 +161,9 @@ E:\code\C\lskj\WindowsCamTest\CellDetect.h(128,58): warning C4244: “参数”:
           [
               _Tp=int
           ]
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(129,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(198,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-E:\code\C\lskj\WindowsCamTest\CellDetect.h(201,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(131,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(200,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+E:\code\C\lskj\WindowsCamTest\CellDetect.h(203,29): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
 E:\code\C\lskj\test\Application.cpp(17,20): warning C4018: “<”: 有符号/无符号不匹配
   正在生成代码...
   test.vcxproj -> E:\code\C\lskj\WindowsCamTest\Debug\test.exe

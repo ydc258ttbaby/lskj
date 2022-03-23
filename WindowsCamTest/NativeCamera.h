@@ -34,10 +34,11 @@ public:
 	bool SaveAsync();
 	cv::Mat OperateImageQueue(cv::Mat inImage, bool bInsert);
 	std::vector<cv::Mat> OperateDetectImageQueue(cv::Mat inImage, bool bInsert, int in_class_index);
-	int Classify(cv::Mat in_image);
+	int Classify(double inDia);
 	float GetAnalyzeProgress();
 	int GetTotalImageSize();
 	std::vector<CellInfo> GetTotalCells();
+	void Clear();
 private:
 	CellDetect m_celldetect;
 	std::string m_save_path;
