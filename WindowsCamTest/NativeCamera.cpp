@@ -144,14 +144,22 @@ std::vector<cv::Mat> NativeCamera::OperateDetectImageQueue(cv::Mat inImage, bool
 	if (bInsert) {
 		//std::cout << "insert " << std::endl;
 		detect_images.at(in_class_index).push(inImage);
+<<<<<<< HEAD
 		while (detect_images[in_class_index].size() > m_detect_image_preview_num) {
+=======
+		while (detect_images[in_class_index].size() > 5) {
+>>>>>>> e82fc9ec2d42773f03975ba197242e53daac5246
 			detect_images[in_class_index].pop();
 		}
 	}
 	else {
 		//std::cout << "get  " << std::endl;
 		while (!detect_images.at(in_class_index).empty()) {
+<<<<<<< HEAD
 			res.push_back(detect_images[in_class_index].back());
+=======
+			res.push_back(detect_images[in_class_index].front());
+>>>>>>> e82fc9ec2d42773f03975ba197242e53daac5246
 			detect_images[in_class_index].pop();
 		}
 	}
@@ -225,7 +233,11 @@ void createAlphaMat(cv::Mat& mat) // 创建一个图像
 	}
 }
 
+<<<<<<< HEAD
 std::vector<CellInfo> NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSaveName, const std::string inSaveRootPath) {
+=======
+int NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const std::string inSaveName, const std::string inSaveRootPath) {
+>>>>>>> e82fc9ec2d42773f03975ba197242e53daac5246
 	int cellNum = 0;
 	std::vector<CellInfo> cellInfos;
 	m_bSave = bSave;
@@ -236,6 +248,7 @@ std::vector<CellInfo> NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const 
 		m_time_old = std::chrono::system_clock::now();
 	}
 	if (bSave || b_time_to_preview) {
+<<<<<<< HEAD
 
 		int32_t ret = 0;
 		uint64_t blockId = 0;
@@ -311,16 +324,76 @@ std::vector<CellInfo> NativeCamera::GetFrame(bool bSave, bool bSaveAsync, const 
 					image.release();
 					pFrame->release(pFrame);
 				}
+=======
+		int32_t ret = -1;
+		uint64_t blockId = 0;
+		GENICAM_Frame* pFrame;
+		std_time ts = std::chrono::system_clock::now();
+		{
+			std::lock_guard<std::mutex> guard(steamsource_mutex);
+			if (NULL == pStreamSource) {
+				m_log_window->AddLog("pstream source is NULL \n");
+				return -1;
+			}
+			ret = pStreamSource->getFrame(pStreamSource, &pFrame, 1);
+			if (ret < 0) {
+				m_log_window->AddLog("getFrame  fail.\n");
+				//getchar();
+				return -1;
+			}
+		}
+		ret = pFrame->valid(pFrame);
+		if (ret < 0) {
+			m_log_window->AddLog("frame is invalid!\n");
+			pFrame->release(pFrame);
+			return -1;
+		}
+		cv::Mat image = cv::Mat(pFrame->getImageHeight(pFrame),
+			pFrame->getImageWidth(pFrame),
+			CV_8U,
+			(uint8_t*)((pFrame->getImage(pFrame)))
+		);
+		std::vector<cv::Mat> cellImages = m_celldetect.getResult(image);
+		
+		cellNum = cellImages.size();
+		if (bSave) {
+			for (int i = 0; i < cellImages.size(); i++) {
+				std::filesystem::path real_save_root_path = std::filesystem::path(inSaveRootPath + "_" + std::to_string(Classify(cellImages[i])));
+				if (!std::filesystem::is_directory(real_save_root_path)) {
+					std::filesystem::create_directories(real_save_root_path);
+				}
+				real_save_root_path /= std::filesystem::path(inSaveName.substr(0, inSaveName.size() - 4) + std::to_string(i) + ".bmp");
+				cv::imwrite(real_save_root_path.string(), cellImages[i]);
+			}
+		}
+		if (b_time_to_preview) {
+			OperateImageQueue(image.clone(), true);
+			for (int i = 0; i < cellImages.size(); i++) {
+				OperateDetectImageQueue(cellImages[i].clone(), true, Classify(cellImages[i]));
+			}
+		}
+		if (bSave) {
+			if (bSaveAsync) {
+				InsertImageQueue(image.clone(), (std::filesystem::path(inSaveRootPath)/std::filesystem::path(inSaveName)).string());
+			}
+			else {
+				//cv::imwrite((std::filesystem::path(inSaveRootPath)/std::filesystem::path(inSaveName)).string(), image);
+>>>>>>> e82fc9ec2d42773f03975ba197242e53daac5246
 			}
 		}
 	}
+<<<<<<< HEAD
 	return cellInfos;
+=======
+	return cellNum;
+>>>>>>> e82fc9ec2d42773f03975ba197242e53daac5246
 }
 
 bool NativeCamera::SaveAsync() {
 	return true;
 	return m_bSaveAsync;
 }
+<<<<<<< HEAD
 int NativeCamera::Classify(double inDia) {
 	// to do: classify 
 	if (inDia <=5) {
@@ -443,4 +516,9 @@ void NativeCamera::Clear() {
 	m_total_images.swap(temp_images);
 	m_analyze_progress = 0.0;
 
+=======
+int NativeCamera::Classify(cv::Mat in_image) {
+	// to do: classify 
+	return 0;
+>>>>>>> e82fc9ec2d42773f03975ba197242e53daac5246
 }

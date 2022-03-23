@@ -22,9 +22,13 @@ public:
 	~NativeCamera();
 	bool Init();
 	uint32_t GetDeviceNum();
+<<<<<<< HEAD
 	std::vector<CellInfo> GetFrame(bool bSave,bool bSaveAsync,const std::string inSaveName, const std::string inSaveRootPath);
 	bool SaveImages(int inId, int inSecond, const std::string inName,bool inBSave);
 	void AnalyzeImages(const std::string inSampleName, const std::string inRootPath);
+=======
+	int GetFrame(bool bSave,bool bSaveAsync,const std::string inSaveName, const std::string inSaveRootPath);
+>>>>>>> e82fc9ec2d42773f03975ba197242e53daac5246
 	bool SetParas(int inWidth, int inHeight, int inOffsetX,double inExposureTime, double inAcquisitionFrameRate);
 	bool StartCapture();
 	bool StopCapture();
@@ -62,11 +66,21 @@ private:
 	LogWindows* m_log_window;
 	int m_class_num;
 	int m_detect_image_preview_num;
+<<<<<<< HEAD
 	std::vector<ImageInfo> m_total_images;
 	std::vector<CellInfo> m_total_cells;
 	float m_analyze_progress = 0.0;
 	
 
+=======
+
+public:
+	void InsertImageQueue(cv::Mat image, const std::string& imagePath);
+	bool SaveAsync();
+	cv::Mat OperateImageQueue(cv::Mat inImage, bool bInsert);
+	std::vector<cv::Mat> OperateDetectImageQueue(cv::Mat inImage, bool bInsert, int in_class_index);
+	int Classify(cv::Mat in_image);
+>>>>>>> e82fc9ec2d42773f03975ba197242e53daac5246
 
 };
 
