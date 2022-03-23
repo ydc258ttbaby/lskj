@@ -51,7 +51,7 @@ struct LogWindows
         }
 
         // Main window
-        bool clear = ImGui::Button("Clear");
+        bool clear = ImGui::Button(u8"Çå¿Õ");
         ImGui::Separator();
         ImGui::BeginChild("scrolling", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
 
