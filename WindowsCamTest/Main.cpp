@@ -18,7 +18,8 @@
 #include "LogWindows.h"
 #include "implot-master/implot.h"
 #include "CellDetect.h"
-#include"ImGuiFileDialog-Lib_Only/ImGuiFileDialog.h"
+#include "ImGuiFileDialog-Lib_Only/ImGuiFileDialog.h"
+#include "Condition.h"
 //setlocale(LC_ALL, "zh-CN");
 
 
@@ -59,7 +60,7 @@ int g_para2 = 0;
 int g_para3 = 0;
 
 // global image save 
-std::string g_file_path = "E:\\Data\\CameraImages\\20220323";
+std::string g_file_path = "E:\\Data\\CameraImages\\20220325";
 bool g_b_save = false;
 bool g_b_async_save = false;
 bool g_b_preview = false;
@@ -76,6 +77,10 @@ std::vector<float> g_img_avg_history_array;
 std::vector<float> g_cell_area_array;
 std::vector<float> g_cell_peri_array;
 std::vector<float> g_cell_dia_array;
+std::vector<float> g_cell_short_array;
+std::vector<float> g_cell_long_array;
+std::vector<float> g_cell_vol_array;
+std::vector<float> g_cell_ell_array;
 
 float g_cell_total;
 float g_cell_per_second_avg = 0;
@@ -88,7 +93,7 @@ LogWindows* g_LogWindow = new LogWindows();
 
 // detect image path
 const int g_detect_class_num = 3;
-const int g_detect_preview_num = 10;
+const int g_detect_preview_num = 8;
 const int g_detect_img_width = 100;
 const int g_detect_img_height = 100;
 std::vector<std::vector<std::string> > g_detect_img_paths(g_detect_class_num, std::vector<std::string>(g_detect_preview_num, ""));
@@ -103,9 +108,28 @@ std::chrono::steady_clock::time_point g_time_start = std::chrono::steady_clock::
 // mutex
 std::mutex g_img_plot_mutex;
 
+//set filter index
+bool set_dia = false;
+bool set_peri = false;
+bool set_area = false;
+bool set_vol = false;
+bool set_ell = false;
 
-void ClearVector(std::vector<float>& inVector) {
-    std::vector<float> init_vector;
+int g_set_filter_store = 0;
+std::string g_img_filter_path = "";
+
+int g_cell_filter = 0;
+
+std::vector<std::string> g_condition_names = {u8"直径",u8"面积",u8"周长",u8"体积",u8"偏心率"};
+int g_property_int = 0;
+int g_logic = 0;
+std::vector<CellInfo> g_filter_cellinfos;
+
+std::vector<Condition> g_conditions;
+
+template <typename T>
+void ClearVector(std::vector<T>& inVector) {
+    std::vector<T> init_vector;
     inVector.swap(init_vector);
 }
 
@@ -121,6 +145,10 @@ void ClearPlot() {
     ClearVector(g_cell_area_array);
     ClearVector(g_cell_peri_array);
     ClearVector(g_cell_dia_array);
+    ClearVector(g_cell_short_array);
+    ClearVector(g_cell_long_array);
+    ClearVector(g_cell_vol_array);
+    ClearVector(g_cell_ell_array);
     g_second = 0;
     g_cell_total = 0;
     g_cell_per_second_avg = 0;
@@ -174,78 +202,7 @@ void GetImageAsync(NativeCamera* in_camera) {
     }
 }
 
-void SaveImageAsync(NativeCamera* in_camera) {
 
-    int cell_per_second1 = 0;
-    int cell_per_second2 = 0;
-    int cell_per_second3 = 0;
-    float cell_per_img_1 = 0;
-    float cell_per_img_2 = 0;
-    float cell_per_img_3 = 0;
-    std::string old_time_str;
-    struct tm time_info;
-    time_t raw_time;
-    while (true) {
-        int cell_num = 0;
-        if (g_b_preview) {
-            if (g_b_save && std::filesystem::is_directory(g_file_path)) {
-                time(&raw_time);
-                localtime_s(&time_info, &raw_time);
-                char time_info_buffer[100];
-                strftime(time_info_buffer, 100, "Pic_%G_%m_%d_%H%M%S_blockId#", &time_info);
-                if (std::string(time_info_buffer) != old_time_str)
-                {
-                    g_cell_total += g_cell_per_second;
-                    g_img_per_second_array.push_back(g_img_per_second);
-                    g_cell_per_second_array.push_back(g_cell_per_second);
-
-                    g_cell_per_second_avg = VectorAverage(g_cell_per_second_array);
-                    g_img_per_second_avg = VectorAverage(g_img_per_second_array);
-                    g_cell_avg_history_array.push_back(g_cell_per_second_avg);
-                    g_img_avg_history_array.push_back(g_img_per_second_avg);
-
-                    cell_per_second1 = cell_per_second2;
-                    cell_per_second2 = cell_per_second3;
-                    cell_per_second3 = g_cell_per_second;
-                    g_cell_avg_3s_array.push_back(float(cell_per_second1 + cell_per_second2 + cell_per_second3) / 3);
-
-                    g_cell_total_array.push_back(g_cell_total);
-                    g_second_array.push_back(g_second++);
-
-                    g_cell_per_img_array.push_back(g_cell_per_second_avg / g_img_per_second_avg);
-
-                    g_img_per_second = 1;
-                    g_cell_per_second = 1;
-                }
-                old_time_str = std::string(time_info_buffer);
-                char count_str[6];
-                sprintf_s(count_str, 6, "%05d", g_img_per_second);
-                std::string image_save_name = old_time_str + std::string(count_str) + ".bmp";
-                std::filesystem::path image_save_path = std::filesystem::path(g_file_path);
-                image_save_path /= std::filesystem::path(image_save_name);
-                std::vector<CellInfo> cell_infos = in_camera->GetFrame(true, g_b_async_save, image_save_name, g_file_path);
-                cell_num = cell_infos.size();
-                if (cell_num >= 0) {
-                    g_img_per_second += 1;
-                    g_cell_per_second += cell_num;
-                    for (int n = 0; n < cell_infos.size(); n++) {
-                        float cell_area = cell_infos[n].m_area;      //像素修正
-                        float cell_peri =cell_infos[n].m_perimeter;
-                        float cell_dia = cell_infos[n].m_diameter;
-
-                        g_cell_area_array.push_back(cell_area);
-                        g_cell_peri_array.push_back(cell_peri);
-                        g_cell_dia_array.push_back(cell_dia);
-                    }
-                }
-            }
-            else {
-                in_camera->GetFrame(false, false, "", "");
-            }
-        }
-    }
-
-}
 
 
 void UpdateInstateCallback(int in_function_type, int in_para1, int in_para2, int in_para3)
@@ -391,6 +348,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
+    //筛选的参数
+    /*char set_dia_min_cstr[128] = "";
+    char set_dia_max_cstr[128] = "";
+    char set_peri_min_cstr[128] = "";
+    char set_peri_max_cstr[128] = "";
+    char set_area_min_cstr[128] = "";
+    char set_area_max_cstr[128] = "";
+    char set_vol_min_cstr[128] = "";
+    char set_vol_max_cstr[128] = "";
+    char set_ell_min_cstr[128] = "";
+    char set_ell_max_cstr[128] = "";
+    float set_dia_min = atoi(set_dia_min_cstr);
+    float set_dia_max = atoi(set_dia_max_cstr);
+    float set_peri_min = atoi(set_peri_min_cstr);
+    float set_peri_max = atoi(set_peri_max_cstr);
+    float set_area_min = atoi(set_area_min_cstr);
+    float set_aera_max = atoi(set_area_max_cstr);
+    float set_ell_min = atoi(set_ell_min_cstr);
+    float set_ell_max = atoi(set_ell_max_cstr);
+    float set_vol_min = atoi(set_vol_min_cstr);
+    float set_vol_max = atoi(set_vol_max_cstr);*/
+    
+
     // capture state
     bool b_stop_capture = true;
     int pos_selected = 39;
@@ -416,6 +396,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     int laser_width = atoi(laser_width_cstr);
     int laser_intensity = atoi(laser_intensity_cstr);
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+
 
     enum Info_Item { Item_et, Item_ev, Item_ci, Item_cc, Item_tv, Item_s, Item_px, Item_py, Item_count };
     std::vector<std::tuple<std::string, float, std::string> > info_v = {
@@ -470,18 +452,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-
-        // reconnect camera
-        //if (!camera->BSaveValid()) {
-        //    g_LogWindow->AddLog("reconnect ... ");
-        //    Sleep(100);
-        //    camera->StopCapture();
-        //    Sleep(100);
-        //    camera->StartCapture();
-        //    Sleep(100);
-        //}
-
-
 
 
         if (b_save != g_b_save) {
@@ -548,6 +518,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             }
             ImGui::EndMainMenuBar();
         }
+
         // capture window
         {
             ImGui::Begin("Capture", NULL, window_flags);
@@ -585,6 +556,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             ImGui::PopStyleColor(1);
             if (ImGui::Button(u8"进出仓", ImVec2(current_region_width * 0.5f, 40))) {
                 g_flow->OpenCloseDoor();
+                g_LogWindow->AddLog(u8"进出仓成功! \n");
             }
             ImGui::SameLine();
             if (ImGui::Button(u8"开始", ImVec2(current_region_width * 0.5f, 40))) {
@@ -635,12 +607,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 g_flow->StopCollect();
             }
 
-
-            
-
-            
-
-
             //save path
             if (g_function_type == 60 && g_para1 == 1) {
                 b_save = true;
@@ -665,22 +631,28 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 b_start = false;
             }
             // analyze
-            if (ImGui::Button(u8"分析", ImVec2(current_region_width * 0.3f, 30)) || (b_able_analyze && g_progress > 0.99)) {
+            if (ImGui::Button(u8"分析", ImVec2(current_region_width * 0.5f, 30)) || (b_able_analyze && g_progress > 0.99)) {
                 std::thread thread_analyze(&NativeCamera::AnalyzeImages, camera, "1", g_file_path);
                 thread_analyze.detach();
                 b_able_analyze = false;
 
             }
-            // Screen shot
             ImGui::SameLine();
-            if (ImGui::Button(u8"截图",  ImVec2(current_region_width * 0.3f, 30)) || (g_progress > 0.99 && b_screenshot)) {
+            if (ImGui::Button(u8"打开图片", ImVec2(current_region_width * 0.5f, 30))) {
+                if (std::filesystem::exists(std::filesystem::path(g_file_path))) {
+                    system(("start " + std::string(g_file_path)).c_str());
+                }
+            }
+            // Screen shot
+            if (ImGui::Button(u8"截图",  ImVec2(current_region_width * 0.5f, 30)) ) {
+
                 cv::Mat img(nScreenHeight, nScreenWidth, CV_8UC3);
                 glPixelStorei(GL_PACK_ALIGNMENT, (img.step & 3) ? 1 : 4);
                 glPixelStorei(GL_PACK_ROW_LENGTH, img.step / img.elemSize()); // 这句不加好像也没问题？
                 glReadPixels(0, 0, img.cols, img.rows, GL_BGR, GL_UNSIGNED_BYTE, img.data);
                 cv::Mat flipped;
                 cv::flip(img, flipped, 0);
-                std::string desktop_path = "C:\\Users\\admin\\Desktop\\test_pic\\";
+                std::string desktop_path = g_file_path;
                 struct tm time_info;
                 time_t raw_time;
                 time(&raw_time);
@@ -696,13 +668,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             }
             // clear plot
             ImGui::SameLine();
-            if (ImGui::Button(u8"清理", ImVec2(current_region_width * 0.3f, 30))) {
+            if (ImGui::Button(u8"清理", ImVec2(current_region_width * 0.5f, 30))) {
+                g_progress = 0.0;
                 ClearPlot();
             }
 
             
             ImGui::End();
         }
+
         // preview window
         {
             ImGui::Begin("Preview", NULL, window_flags);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
@@ -710,9 +684,32 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             ImGui::Image((void*)(intptr_t)tex_id_preview, ImVec2(atoi(img_width_cstr), atoi(img_height_cstr)));
             ImGui::End();
         }
+
         // statis window
-        {
-            //ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(1.0,1.0,1.0,1.0));
+
+        {   /*ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(1.0f, 1.0f, 1.0f, 0.9f));
+            ImGui::PushStyleColor(ImPlotCol_PlotBg, ImVec4(0.42f, 0.57f, 1.00f, 0.13f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1.00f, 1.00f, 1.00f, 0.0f));
+            ImGui::PushStyleColor(ImPlotCol_PlotBorder, ImVec4(0.00f, 0.00f, 0.00f, 0.00f)); 
+            ImGui::PushStyleColor(ImPlotCol_LegendBg, ImVec4(1.00f, 1.00f, 1.00f, 0.0f));
+            ImGui::PushStyleColor(ImPlotCol_LegendBorder,ImVec4(0.82f, 0.82f, 0.82f, 1.00f));
+            ImGui::PushStyleColor(ImPlotCol_LegendText,ImVec4(0.00f, 0.00f, 0.00f, 1.00f));
+            ImGui::PushStyleColor(ImPlotCol_InlayText,ImVec4(0.00f, 0.00f, 0.00f, 0.00f));
+            ImGui::PushStyleColor(ImPlotCol_AxisText,ImVec4(1.00f, 1.00f, 1.00f, 0.00f));
+            ImGui::PushStyleColor(ImPlotCol_AxisGrid,ImVec4(0.00f, 0.00f, 0.00f, 0.50f));
+            ImGui::PushStyleColor(ImPlotCol_AxisTick,ImVec4(1.00f, 1.00f, 1.00f, 0.0f));*/
+
+            
+           /* colors[ImPlotCol_PlotBorder] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+            colors[ImPlotCol_LegendBg] = ImVec4(1.00f, 1.00f, 1.00f, 0.98f);
+            colors[ImPlotCol_LegendBorder] = ImVec4(0.82f, 0.82f, 0.82f, 0.80f);
+            colors[ImPlotCol_LegendText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
+            colors[ImPlotCol_TitleText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
+            colors[ImPlotCol_InlayText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
+            colors[ImPlotCol_AxisText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
+            colors[ImPlotCol_AxisGrid] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+            colors[ImPlotCol_AxisTick] = ImVec4(0.00f, 0.00f, 0.00f, 0.25f);*/
+            
 
             ImGui::Begin("Statis", NULL, window_flags);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
             // plot data prepare
@@ -725,70 +722,75 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             static float rratios[] = { 1,1 };
             static float cratios[] = { 1,1,1 };
 
-            if (ImPlot::BeginSubplots("My Subplots", 3, 2, ImVec2(-1, -1), flags, rratios, cratios)) {
- /*               if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PlotLine("cell per second", g_second_array.data(), g_cell_per_second_array.data(), g_second_array.size());
-                    ImPlot::PlotLine("avg", g_second_array.data(), g_cell_avg_history_array.data(), g_second_array.size());
-                    ImPlot::PlotLine("avg3", g_second_array.data(), g_cell_avg_3s_array.data(), g_second_array.size());
+            if (ImPlot::BeginSubplots("My Subplots", 3, 3, ImVec2(-1, -1), flags, rratios, cratios)) {
+ 
 
-                    ImPlot::EndPlot();
-                }
-                if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PlotLine("cell total", g_second_array.data(), g_cell_total_array.data(), g_second_array.size());
-                    ImPlot::EndPlot();
-                }*/
-                if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes(u8"时间(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PlotLine(u8"图像每秒", g_second_array.data(), g_img_per_second_array.data(), g_second_array.size());
-                    //ImPlot::PlotLine("avg", g_second_array.data(), g_img_avg_history_array.data(), g_second_array.size());
-                    ImPlot::EndPlot();
-                }/*
-                if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes("time(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PlotLine("cell per img", g_second_array.data(), g_cell_per_img_array.data(), g_second_array.size());
-                    ImPlot::EndPlot();
-                }
-                */
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"直径(um)", u8"周长(um)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PushStyleColor(ImPlotCol_MarkerFill, ImVec4(0.0, 1.0, 1.0, 1.0));
+                    ImPlot::PushStyleColor(ImPlotCol_MarkerFill, ImVec4(0.0, 0.3, 0.8, 1.0));
                     ImPlot::PlotScatter("", g_cell_dia_array.data(), g_cell_peri_array.data(), g_cell_dia_array.size());
                     ImPlot::PopStyleColor(1);
                     ImPlot::EndPlot();
                 }
 
                 if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes(u8"直径(um)", u8"面积(um2)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupAxes(u8"直径(um)", u8"偏心率", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PushStyleColor(ImPlotCol_MarkerFill,ImVec4(1.0,0.0,0.0,1.0));
-                    ImPlot::PlotScatter("", g_cell_dia_array.data(), g_cell_area_array.data(), g_cell_dia_array.size());
+                    ImPlot::PushStyleColor(ImPlotCol_MarkerFill,ImVec4(0.5,0.3,0.2,1.0));
+                    ImPlot::PlotScatter("", g_cell_dia_array.data(), g_cell_ell_array.data(), g_cell_dia_array.size());
                     ImPlot::PopStyleColor(1);
                     ImPlot::EndPlot();
                 }
+
                 if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes(u8"直径(um)", "", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupAxes(u8"长(um)", u8"短(um2)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PushStyleColor(ImPlotCol_MarkerFill, ImVec4(0.6, 0.2, 0.2, 1.0));
+                    ImPlot::PlotScatter("", g_cell_long_array.data(), g_cell_short_array.data(), g_cell_long_array.size());
+                    ImPlot::PopStyleColor(1);
+                    ImPlot::EndPlot();
+                 }
+
+                if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes(u8"直径(um)", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotHistogram("", g_cell_dia_array.data(), g_cell_dia_array.size(), 100);
                     ImPlot::EndPlot();
                 }
 
                 if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes(u8"周长(um)", "", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupAxes(u8"周长(um)", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotHistogram("", g_cell_peri_array.data(), g_cell_peri_array.size(), 100);
                     ImPlot::EndPlot();
                 }
+
                 if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes(u8"面积(um2)", "", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupAxes(u8"面积(um2)", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotHistogram("", g_cell_area_array.data(), g_cell_area_array.size(), 100);
+                    ImPlot::EndPlot();
+                }
+
+                if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes(u8"体积(um3)", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PlotHistogram("", g_cell_vol_array.data(), g_cell_vol_array.size(), 100);
+                    ImPlot::EndPlot();
+                }
+
+                if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes(u8"偏心率", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PlotHistogram("", g_cell_ell_array.data(), g_cell_ell_array.size(), 50);
+                    ImPlot::EndPlot();
+                }
+
+                if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes(u8"时间(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PlotLine(u8"图像每秒", g_second_array.data(), g_img_per_second_array.data(), g_second_array.size());
                     ImPlot::EndPlot();
                 }
 
@@ -798,35 +800,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         g_cell_dia_array.push_back(total_cells[i].m_diameter);
                         g_cell_area_array.push_back(total_cells[i].m_area);
                         g_cell_peri_array.push_back(total_cells[i].m_perimeter);
-                        if(i > 10000) break;
-                    }
-                    std::vector cell_class_num(g_detect_class_num,0);
-                    for (int i = 0; i < total_cells.size(); i++) {
-                        int cell_class = total_cells[i].m_class;
-                        cv::Mat detect_img = GrayToRGB(total_cells[i].m_image);
-                        if (!detect_img.empty() && cell_class_num[cell_class] < g_detect_preview_num) {
-                            LoadTextureFromImage(detect_img, &(g_detect_tex_ids[cell_class][cell_class_num[cell_class]]));
-                            cell_class_num[cell_class]++;
-                        }
-                        int num_sum = 0;
-                        for (int num : cell_class_num) {
-                            num_sum += num;
-                        }
-                        if (num_sum >= g_detect_class_num * (g_detect_preview_num - 1)) {
-                            break;
-                        }
-                    }
-                    for (int i = 0; i < g_detect_class_num; i++) {
-                        std::vector<cv::Mat> temp_images = camera->OperateDetectImageQueue(cv::Mat(), false, i);
-                        for (int j = 0; j < temp_images.size(); j++) {
-                            cv::Mat detect_img = GrayToRGB(temp_images[j]);
-                            if (!detect_img.empty()) {
-                                LoadTextureFromImage(detect_img, &(g_detect_tex_ids[i][j]));
-                            }
-                        }
+                        g_cell_short_array.push_back(total_cells[i].m_shortaxis);
+                        g_cell_long_array.push_back(total_cells[i].m_longaxis);
+                        g_cell_vol_array.push_back(total_cells[i].m_vol);
+                        g_cell_ell_array.push_back(total_cells[i].m_eccentricity);
+
+                        if (i > 10000) break;
                     }
                     
-                    
+
+
                 }
 
 
@@ -835,34 +818,200 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 ImPlot::EndSubplots();
             }
             ImGui::End();
-            //ImGui::PopStyleColor(1);
+            //ImGui::PopStyleColor(11);
 
+
+        }
+
+        //filter window,用户自定义设定参数过滤
+        {
+        ImGui::Begin("filter", NULL, window_flags);
+        ImGui::Text(u8"筛选自定义设定");
+        ImGui::Separator();
+
+        //IMGUI_DEMO_MARKER("Help");
+        if (ImGui::CollapsingHeader(u8"条件添加"))
+        {
+            Condition m_condition;
+            
+            float c_min;
+            float c_max;
+
+            
+            ImGui::Combo(u8"条件选择", &g_property_int, u8"直径\0面积\0周长\0体积\0离心率\0");
+            m_condition.m_property = (Enum_property)g_property_int;
+
+            static float set_min = 0.001f;
+            static float set_max = 0.001f;
+
+            ImGui::InputFloat(u8"最小", &set_min, 0.01f, 1.0f, "%.3f");
+            ImGui::InputFloat(u8"最大", &set_max, 0.01f, 1.0f, "%.3f");
+
+            ImGui::Combo(u8"条件", &g_logic, u8"与\0或\0");
+            m_condition.m_min = set_min;
+            m_condition.m_max = set_max;
+            m_condition.m_b_and = g_logic;
+
+            if (ImGui::Button(u8"确认", ImVec2(90, 25))) {
+                g_conditions.push_back(m_condition);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(u8"清空条件", ImVec2(90, 25))) {
+                ClearVector(g_conditions);
+            }
+
+
+
+        }
+
+        ImGui::Separator();
+        ImGui::Combo(u8"是否保存", &g_set_filter_store, u8"不保存\0保存\0");
+        if (g_set_filter_store == 1)
+        {
+            if (ImGui::Button(u8"选择路径", ImVec2(80, 40)))
+            {
+                BROWSEINFO ofn;
+                TCHAR szFile[MAX_PATH];
+
+                ZeroMemory(&ofn, sizeof(BROWSEINFO));
+                ofn.hwndOwner = NULL;
+                ofn.pszDisplayName = szFile;
+                ofn.lpszTitle = _T("选择文件夹:");
+                ofn.ulFlags = BIF_RETURNFSANCESTORS;
+                LPITEMIDLIST idl = SHBrowseForFolder(&ofn);
+                if (idl != NULL)
+                {
+                    SHGetPathFromIDList(idl, szFile);
+                    g_img_filter_path = unicode2string(szFile);
+                }
+
+            }
+            ImGui::Text(u8"保存路径:");
+            ImGui::SameLine;
+            ImGui::Text(g_img_filter_path.c_str());
+        }
+
+        ImGui::Separator();
+        // 执行筛选函数
+        if (ImGui::Button(u8"执行筛选", ImVec2(150, 40))) {
+            ClearVector(g_filter_cellinfos);
+            for (int i = 0; i < g_detect_tex_ids.size(); i++) {
+                for (int j = 0; j < g_detect_tex_ids[0].size(); j++) {
+                    glDeleteTextures(1, &(g_detect_tex_ids[i][j]));
+                    g_detect_tex_ids[i][j] = 0;
+                }
+            }
+
+            //传入数据
+            std::vector<CellInfo> cell_infos = camera->GetTotalCells();
+            int filter_cell_num = 0;
+            for (int i = 0; i < cell_infos.size(); i++) {
+                bool b_cell_filter_total = false;
+                for (int j = 0; j < g_conditions.size(); j++) {
+                    bool b_cell_filter_single = true;
+                    switch (g_conditions[j].m_property) {
+                        case Enum_property::Enum_diameter:
+                            b_cell_filter_single = (cell_infos[i].m_diameter > g_conditions[j].m_min && cell_infos[i].m_diameter < g_conditions[j].m_max);
+                            break;
+                        case Enum_property::Enum_area:
+                            b_cell_filter_single = (cell_infos[i].m_area > g_conditions[j].m_min && cell_infos[i].m_area < g_conditions[j].m_max);
+                            break;
+                        case Enum_property::Enum_perimeter:
+                            b_cell_filter_single = (cell_infos[i].m_perimeter > g_conditions[j].m_min && cell_infos[i].m_perimeter < g_conditions[j].m_max);
+                            break;
+                        case Enum_property::Enum_volume:
+                            b_cell_filter_single = (cell_infos[i].m_vol > g_conditions[j].m_min && cell_infos[i].m_vol < g_conditions[j].m_max);
+                            break;
+                        case Enum_property::Enum_eccentricity:
+                            b_cell_filter_single = (cell_infos[i].m_eccentricity > g_conditions[j].m_min && cell_infos[i].m_eccentricity < g_conditions[j].m_max);
+                            break;
+                    }
+                    if (j == 0) {
+                        if (g_conditions[j].m_b_and == 0) {
+                            b_cell_filter_total = true;
+                        }
+                        else if (g_conditions[j].m_b_and == 1) {
+                            b_cell_filter_total = false;
+                        }
+                    }
+                    if (g_conditions[j].m_b_and == 0) {
+                        // and
+                        b_cell_filter_total = b_cell_filter_total && b_cell_filter_single;
+                    }
+                    else if(g_conditions[j].m_b_and == 1){
+                        // or
+                        b_cell_filter_total = b_cell_filter_total || b_cell_filter_single;
+                    }
+                }
+                if (b_cell_filter_total) {
+                    g_filter_cellinfos.push_back(cell_infos[i]);
+                    if (filter_cell_num < g_detect_class_num * g_detect_preview_num) {
+                        int y = filter_cell_num % g_detect_preview_num;
+                        int x = filter_cell_num / g_detect_preview_num;
+                        LoadTextureFromImage(GrayToRGB(cell_infos[i].m_image), &(g_detect_tex_ids.at(x).at(y)));
+                    }
+                    if (g_set_filter_store) {
+                        std::string save_filter_cell_path = (std::filesystem::path(g_img_filter_path)/std::filesystem::path(cell_infos[i].m_name)).string();
+                        cv::imwrite(save_filter_cell_path.c_str(),cell_infos[i].m_image);
+                    }
+                    filter_cell_num++;
+                }
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::End();
         }
         // detect window
         {
             ImGui::Begin("detect", NULL, window_flags);
             ImGui::BeginChild("scrolling", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
-            for (int i = 0; i < g_detect_class_num; i++) {
-                std::string btn_text = u8"类别 " + std::to_string(i);
-                if (ImGui::Button(btn_text.c_str(), ImVec2(100, 100))) {
-                    std::string path = g_file_path + "\\" + std::to_string(i);
-                    if (std::filesystem::exists(std::filesystem::path(path))) {
-                        system(("start " + std::string(path)).c_str());
-                    }
-                    else {
-                        g_LogWindow->AddLog("file : %s not exists !! \n", path.c_str());
-                    }
+            for (int i = 0; i < g_conditions.size(); i++)
+            {
+                std::string bottonname = std::to_string(g_conditions[i].m_min)+"<"+ g_condition_names.at(g_conditions[i].m_property) + "<"+ std::to_string(g_conditions[i].m_max);
+                if (ImGui::Button(bottonname.c_str()))
+                {
+
                 }
-                ImGui::SameLine();
+                if (i < g_conditions.size() - 1) {
+                    ImGui::SameLine();
+                }
+                else {
+                    ImGui::Separator();
+                }
+            }
+            for (int i = 0; i < g_detect_class_num; i++) {
+                //std::string btn_text = u8"类别 " + std::to_string(i);
+                //if (ImGui::Button(btn_text.c_str(), ImVec2(100, 100))) {
+                //    std::string path = g_file_path + "\\" + std::to_string(i);
+                //    if (std::filesystem::exists(std::filesystem::path(path))) {
+                //        system(("start " + std::string(path)).c_str());
+                //    }
+                //    else {
+                //        g_LogWindow->AddLog("file : %s not exists !! \n", path.c_str());
+                //    }
+                //}
+                //ImGui::SameLine();
                 for (int j = 0; j < g_detect_preview_num; j++) {
                     ImGui::Image((void*)(intptr_t)g_detect_tex_ids[i][j], ImVec2(g_detect_img_width, g_detect_img_height));
                     ImGui::SameLine();
                 }
                 ImGui::NewLine();
             }
+            ImGui::Separator();
+            std::string btn_text = u8"打开筛选细胞图，一共" + std::to_string(g_filter_cellinfos.size()) + u8"个";
+            if (ImGui::Button(btn_text.c_str())) {
+                if (std::filesystem::exists(std::filesystem::path(g_img_filter_path))) {
+                    system(("start " + std::string(g_img_filter_path)).c_str());
+                }
+                else {
+                    g_LogWindow->AddLog("file : %s not exists !! \n", g_img_filter_path.c_str());
+                }
+            }
             ImGui::EndChild();
             ImGui::End();
         }
+
         // debug window
         {
             ImGui::Begin("debug", NULL, window_flags);
@@ -892,13 +1041,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::Text("para2 %d", g_para2);
                     ImGui::Text("para3 %d", g_para3);
                     ImGui::Separator();
-                    ImGui::Text("g_progress %f", g_progress);
-                    ImGui::Text("b screenshot %d", b_screenshot);
+                    ImGui::Text(u8"g_progress %f", g_progress);
+                    //ImGui::Text("b screenshot %d", b_screenshot);
                     ImGui::Text("b start %d", b_start);
                     ImGui::Text("g b save %d", g_b_save);
                     ImGui::Text("b save %d", b_save);
-                    ImGui::Text("total images %d", camera->GetTotalImageSize());
-                    ImGui::Text("total cell %d", camera->GetTotalCells().size());
+                    ImGui::Text(u8"拍摄图像数: %d", camera->GetTotalImageSize());
+                    ImGui::Text(u8"拍摄细胞总数: %d", camera->GetTotalCells().size());
                     ImGui::Separator();
                     ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
                     ImGui::Separator();
@@ -931,8 +1080,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::InputText(u8"宽度", img_width_cstr, IM_ARRAYSIZE(img_width_cstr));
                     ImGui::InputText(u8"高度", img_height_cstr, IM_ARRAYSIZE(img_height_cstr));
                     ImGui::InputText(u8"偏移", img_offset_x_cstr, IM_ARRAYSIZE(img_offset_x_cstr));
-                    ImGui::InputText(u8"时间", img_exposure_cstr, IM_ARRAYSIZE(img_exposure_cstr));
-                    ImGui::InputText(u8"张", img_acquisition_frame_rate_cstr, IM_ARRAYSIZE(img_acquisition_frame_rate_cstr));
+                    ImGui::InputText(u8"同步", img_exposure_cstr, IM_ARRAYSIZE(img_exposure_cstr));
+                    ImGui::InputText(u8"FPS", img_acquisition_frame_rate_cstr, IM_ARRAYSIZE(img_acquisition_frame_rate_cstr));
                     // laser setting
                     ImGui::Separator();
                     ImGui::Text(u8"激光");
@@ -959,7 +1108,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     }
                     ImGui::InputText(u8"脉冲", laser_frequency_cstr, IM_ARRAYSIZE(laser_frequency_cstr));
                     ImGui::InputText(u8"脉宽(ns)", laser_width_cstr, IM_ARRAYSIZE(laser_width_cstr));
-                    ImGui::InputText(u8"强度", laser_intensity_cstr, IM_ARRAYSIZE(laser_intensity_cstr));
+                    ImGui::InputText(u8"强度(0-200）", laser_intensity_cstr, IM_ARRAYSIZE(laser_intensity_cstr));
 
                     //style 
                     ImGui::Separator();
@@ -974,12 +1123,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         case 2: ImGui::StyleColorsClassic(); break;
                         }
                     }
-                    //ImGuiIO& io = ImGui::GetIO();
-                    //io.FontGlobalScale = 1.5;
-                    //ImGuiStyle& style = ImGui::GetStyle();
-                    //style.FrameRounding = 4;
-                    ////style.SelectableTextAlign = ImVec2(0.5, 0.5);
-                    //style 
                     ImGui::EndTabItem();
 
                 }

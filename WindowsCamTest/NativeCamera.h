@@ -15,6 +15,20 @@ using namespace cv;
 using namespace std::literals;
 typedef std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<long long int, std::ratio<1, 1000000000>>> std_time;
 typedef std::unordered_map<int, double> CameraParameters;
+
+struct filter_info {
+	float dia_min;
+	float dia_max;
+	float peri_min;
+	float peri_max;
+	float area_min;
+	float area_max;
+	float vol_min;
+	float vol_max;
+	float ell_min;
+	float ell_max;
+};
+
 class NativeCamera {
 public:
 	NativeCamera();
@@ -35,6 +49,7 @@ public:
 	cv::Mat OperateImageQueue(cv::Mat inImage, bool bInsert);
 	std::vector<cv::Mat> OperateDetectImageQueue(cv::Mat inImage, bool bInsert, int in_class_index);
 	int Classify(double inDia);
+	int Filter(filter_info inSetfilter, const std::string inStore_path, vector<CellInfo> inTotalcellinfo);
 	float GetAnalyzeProgress();
 	int GetTotalImageSize();
 	std::vector<CellInfo> GetTotalCells();

@@ -321,6 +321,7 @@ bool NativeCamera::SaveAsync() {
 	return true;
 	return m_bSaveAsync;
 }
+
 int NativeCamera::Classify(double inDia) {
 	// to do: classify 
 	if (inDia <=5) {
@@ -333,6 +334,19 @@ int NativeCamera::Classify(double inDia) {
 
 	return 2;
 }
+
+
+//cell filter 
+int NativeCamera::Filter(filter_info inSetfilter, const std::string inStore_path, vector<CellInfo> inTotalcellinfo)
+{
+	int s_cell_num = 0;
+
+
+	return s_cell_num;
+}
+
+
+
 bool NativeCamera::SaveImages(int inId, int inSecond, const std::string inName, bool inBSave) {
 
 	bool b_time_to_preview = false;
@@ -393,12 +407,14 @@ bool NativeCamera::SaveImages(int inId, int inSecond, const std::string inName, 
 	return true;
 
 }
+
 void NativeCamera::AnalyzeImages(const std::string inSampleName, const std::string inRootPath) {
 	m_total_cells.reserve(10000);
 	int cell_id = 0;
+	std::vector<CellInfo> cellInfos;
 	for (int i = 0; i < m_total_images.size(); ++i) {
 		m_analyze_progress = static_cast<float>(i)/ m_total_images.size();
-		std::vector<CellInfo> cellInfos = m_celldetect.GetResult(m_total_images[i].m_image);
+		cellInfos = m_celldetect.GetResult(m_total_images[i].m_image);
 		for (int j = 0; j < cellInfos.size(); ++j) {
 			CellInfo cell_info = cellInfos[j];
 			cell_info.m_second = m_total_images[i].m_second;
@@ -427,6 +443,7 @@ void NativeCamera::AnalyzeImages(const std::string inSampleName, const std::stri
 	std::vector<ImageInfo> temp;
 	m_total_images.swap(temp);
 }
+
 float NativeCamera::GetAnalyzeProgress() {
 	return m_analyze_progress;
 }
