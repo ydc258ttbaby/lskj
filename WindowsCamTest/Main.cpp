@@ -127,6 +127,36 @@ std::vector<CellInfo> g_filter_cellinfos;
 
 std::vector<Condition> g_conditions;
 
+double RandomGauss() {
+    static double V1, V2, S;
+    static int phase = 0;
+    double X;
+    if (phase == 0) {
+        do {
+            double U1 = (double)rand() / RAND_MAX;
+            double U2 = (double)rand() / RAND_MAX;
+            V1 = 2 * U1 - 1;
+            V2 = 2 * U2 - 1;
+            S = V1 * V1 + V2 * V2;
+        } while (S >= 1 || S == 0);
+
+        X = V1 * sqrt(-2 * log(S) / S);
+    }
+    else
+        X = V2 * sqrt(-2 * log(S) / S);
+    phase = 1 - phase;
+    return X;
+}
+
+template <int N>
+struct NormalDistribution {
+    NormalDistribution(double mean, double sd) {
+        for (int i = 0; i < N; ++i)
+            Data[i] = RandomGauss() * sd + mean;
+    }
+    double Data[N];
+};
+
 template <typename T>
 void ClearVector(std::vector<T>& inVector) {
     std::vector<T> init_vector;
@@ -174,7 +204,7 @@ void GetImageAsync(NativeCamera* in_camera) {
     time_t raw_time;
     auto time_now = std::chrono::steady_clock::now();
     if (in_camera->Init()) {
-        in_camera->SetParas(320, 480, 160, 170, 2000);
+        in_camera->SetParas(320, 480, 160, 171, 2000);
         in_camera->StartCapture();
     }
     while (true) {
@@ -343,8 +373,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
     // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-
+    //ImGui::StyleColorsDark();
+    ImGui::StyleColorsLight();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
@@ -386,7 +416,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     char img_width_cstr[128] = "320";
     char img_offset_x_cstr[128] = "160";
     char img_height_cstr[128] = "480";
-    char img_exposure_cstr[128] = "170";
+    char img_exposure_cstr[128] = "171";
     char img_acquisition_frame_rate_cstr[128] = "2000";
 
     char laser_frequency_cstr[128] = "5000";
@@ -442,7 +472,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // progress bar color
     ImVec4 orange_color = ImVec4(1.0, 0.43, 0.35, 1.0);
-    ImVec4 green_color = ImVec4(0.43, 1.0, 0.35, 1.0);
+    ImVec4 green_color = ImVec4(0.6, 1.0, 0.6, 1.0);
     ImVec4 progress_bar_color = orange_color;
 
     // 
@@ -636,6 +666,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 thread_analyze.detach();
                 b_able_analyze = false;
 
+                
+                
+
             }
             ImGui::SameLine();
             if (ImGui::Button(u8"打开图片", ImVec2(current_region_width * 0.5f, 30))) {
@@ -684,6 +717,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             ImGui::Image((void*)(intptr_t)tex_id_preview, ImVec2(atoi(img_width_cstr), atoi(img_height_cstr)));
             ImGui::End();
         }
+        //ImPlot::ShowDemoWindow();
 
         // statis window
 
@@ -721,72 +755,59 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             static ImPlotSubplotFlags flags = ImPlotSubplotFlags_NoTitle;
             static float rratios[] = { 1,1 };
             static float cratios[] = { 1,1,1 };
+            static int xybins[2] = { 90,30 };
+            ImGui::SliderInt2("Bins", xybins, 1, 200);
 
             if (ImPlot::BeginSubplots("My Subplots", 3, 3, ImVec2(-1, -1), flags, rratios, cratios)) {
- 
 
+                ImPlot::PushColormap("Greys");
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"直径(um)", u8"周长(um)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PushStyleColor(ImPlotCol_MarkerFill, ImVec4(0.0, 0.3, 0.8, 1.0));
-                    ImPlot::PlotScatter("", g_cell_dia_array.data(), g_cell_peri_array.data(), g_cell_dia_array.size());
-                    ImPlot::PopStyleColor(1);
+                    ImPlot::PlotHistogram2D("", g_cell_dia_array.data(), g_cell_peri_array.data(), g_cell_dia_array.size(), xybins[0], xybins[1],  false, ImPlotRect(0, 10, 0, 10));
                     ImPlot::EndPlot();
                 }
-
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"直径(um)", u8"偏心率", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PushStyleColor(ImPlotCol_MarkerFill,ImVec4(0.5,0.3,0.2,1.0));
-                    ImPlot::PlotScatter("", g_cell_dia_array.data(), g_cell_ell_array.data(), g_cell_dia_array.size());
-                    ImPlot::PopStyleColor(1);
+                    ImPlot::PlotHistogram2D("", g_cell_dia_array.data(), g_cell_ell_array.data(), g_cell_dia_array.size(), xybins[0], xybins[1],  false, ImPlotRect(0, 0, 0, 0));
                     ImPlot::EndPlot();
                 }
-
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"长(um)", u8"短(um2)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
-                    ImPlot::PushStyleColor(ImPlotCol_MarkerFill, ImVec4(0.6, 0.2, 0.2, 1.0));
-                    ImPlot::PlotScatter("", g_cell_long_array.data(), g_cell_short_array.data(), g_cell_long_array.size());
-                    ImPlot::PopStyleColor(1);
+                    ImPlot::PlotHistogram2D("", g_cell_long_array.data(), g_cell_short_array.data(), g_cell_long_array.size(), xybins[0], xybins[1], false, ImPlotRect(0, 0, 0, 0));
                     ImPlot::EndPlot();
                  }
+                ImPlot::PopColormap();
 
-                if (ImPlot::BeginPlot("")) {
+               if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"直径(um)", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotHistogram("", g_cell_dia_array.data(), g_cell_dia_array.size(), 100);
                     ImPlot::EndPlot();
                 }
-
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"周长(um)", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotHistogram("", g_cell_peri_array.data(), g_cell_peri_array.size(), 100);
                     ImPlot::EndPlot();
                 }
-
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"面积(um2)", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotHistogram("", g_cell_area_array.data(), g_cell_area_array.size(), 100);
                     ImPlot::EndPlot();
                 }
-
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"体积(um3)", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotHistogram("", g_cell_vol_array.data(), g_cell_vol_array.size(), 100);
                     ImPlot::EndPlot();
                 }
-
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"偏心率", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotHistogram("", g_cell_ell_array.data(), g_cell_ell_array.size(), 50);
                     ImPlot::EndPlot();
                 }
-
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"时间(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
@@ -795,6 +816,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 }
 
                 if (camera->GetTotalImageSize() == 0 && g_cell_dia_array.size() == 0) {
+                    // clear display tex id 
+                    for (int i = 0; i < g_detect_tex_ids.size(); i++) {
+                        for (int j = 0; j < g_detect_tex_ids[0].size(); j++) {
+                            glDeleteTextures(1, &(g_detect_tex_ids[i][j]));
+                            g_detect_tex_ids[i][j] = 0;
+                        }
+                    }
                     std::vector<CellInfo> total_cells = camera->GetTotalCells();
                     for (int i = 0; i < total_cells.size(); i++) {
                         g_cell_dia_array.push_back(total_cells[i].m_diameter);
@@ -805,11 +833,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         g_cell_vol_array.push_back(total_cells[i].m_vol);
                         g_cell_ell_array.push_back(total_cells[i].m_eccentricity);
 
-                        if (i > 10000) break;
+                        if (i > 5000) break;
+                        // display total cells image 
+                        if (i < g_detect_class_num * g_detect_preview_num) {
+                            int y = i % g_detect_preview_num;
+                            int x = i / g_detect_preview_num;
+                            LoadTextureFromImage(GrayToRGB(total_cells[i].m_image), &(g_detect_tex_ids.at(x).at(y)));
+                        }
                     }
-                    
-
-
+                    //std::sort(g_cell_dia_array.begin(), g_cell_dia_array.end());
+                    //std::sort(g_cell_area_array.begin(), g_cell_area_array.end());
+                    //std::sort(g_cell_peri_array.begin(), g_cell_peri_array.end());
+                    //std::sort(g_cell_short_array.begin(), g_cell_short_array.end());
+                    //std::sort(g_cell_long_array.begin(), g_cell_long_array.end());
+                    //std::sort(g_cell_vol_array.begin(), g_cell_vol_array.end());
+                    //std::sort(g_cell_ell_array.begin(), g_cell_ell_array.end());
                 }
 
 
@@ -817,6 +855,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 /*ImGui::PlotHistogram("Histogram", arr, IM_ARRAYSIZE(arr), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80.0f));*/
                 ImPlot::EndSubplots();
             }
+                //ImGui::PlotHistogram("Histogram", g_cell_ell_array.data(), g_cell_ell_array.size(), 0, NULL, FLT_MAX, FLT_MAX, ImVec2(0, 80));
+                //ImGui::PlotHistogram("Histogram", g_cell_dia_array.data(), g_cell_dia_array.size(), 0, NULL, FLT_MAX, FLT_MAX, ImVec2(0, 80));
+                //ImGui::PlotHistogram("Histogram", g_cell_peri_array.data(), g_cell_peri_array.size(), 0, NULL, FLT_MAX, FLT_MAX, ImVec2(0, 80));
+                //ImPlot::PlotHistogram("", g_cell_dia_array.data(), g_cell_dia_array.size(), 50);
+
             ImGui::End();
             //ImGui::PopStyleColor(11);
 
@@ -838,7 +881,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             float c_max;
 
             
-            ImGui::Combo(u8"条件选择", &g_property_int, u8"直径\0面积\0周长\0体积\0离心率\0");
+            ImGui::Combo(u8"条件选择", &g_property_int, u8"直径\0面积\0周长\0体积\0偏心率\0");
             m_condition.m_property = (Enum_property)g_property_int;
 
             static float set_min = 0.001f;
@@ -911,19 +954,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     bool b_cell_filter_single = true;
                     switch (g_conditions[j].m_property) {
                         case Enum_property::Enum_diameter:
-                            b_cell_filter_single = (cell_infos[i].m_diameter > g_conditions[j].m_min && cell_infos[i].m_diameter < g_conditions[j].m_max);
+                            b_cell_filter_single = (cell_infos[i].m_diameter >= g_conditions[j].m_min && cell_infos[i].m_diameter <= g_conditions[j].m_max);
                             break;
                         case Enum_property::Enum_area:
-                            b_cell_filter_single = (cell_infos[i].m_area > g_conditions[j].m_min && cell_infos[i].m_area < g_conditions[j].m_max);
+                            b_cell_filter_single = (cell_infos[i].m_area >= g_conditions[j].m_min && cell_infos[i].m_area <= g_conditions[j].m_max);
                             break;
                         case Enum_property::Enum_perimeter:
-                            b_cell_filter_single = (cell_infos[i].m_perimeter > g_conditions[j].m_min && cell_infos[i].m_perimeter < g_conditions[j].m_max);
+                            b_cell_filter_single = (cell_infos[i].m_perimeter >= g_conditions[j].m_min && cell_infos[i].m_perimeter <= g_conditions[j].m_max);
                             break;
                         case Enum_property::Enum_volume:
-                            b_cell_filter_single = (cell_infos[i].m_vol > g_conditions[j].m_min && cell_infos[i].m_vol < g_conditions[j].m_max);
+                            b_cell_filter_single = (cell_infos[i].m_vol >= g_conditions[j].m_min && cell_infos[i].m_vol <= g_conditions[j].m_max);
                             break;
                         case Enum_property::Enum_eccentricity:
-                            b_cell_filter_single = (cell_infos[i].m_eccentricity > g_conditions[j].m_min && cell_infos[i].m_eccentricity < g_conditions[j].m_max);
+                            b_cell_filter_single = (cell_infos[i].m_eccentricity >= g_conditions[j].m_min && cell_infos[i].m_eccentricity <= g_conditions[j].m_max);
                             break;
                     }
                     if (j == 0) {
@@ -950,11 +993,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         int x = filter_cell_num / g_detect_preview_num;
                         LoadTextureFromImage(GrayToRGB(cell_infos[i].m_image), &(g_detect_tex_ids.at(x).at(y)));
                     }
+                    filter_cell_num++;
                     if (g_set_filter_store) {
                         std::string save_filter_cell_path = (std::filesystem::path(g_img_filter_path)/std::filesystem::path(cell_infos[i].m_name)).string();
                         cv::imwrite(save_filter_cell_path.c_str(),cell_infos[i].m_image);
                     }
-                    filter_cell_num++;
                 }
             }
         }
@@ -1047,7 +1090,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::Text("g b save %d", g_b_save);
                     ImGui::Text("b save %d", b_save);
                     ImGui::Text(u8"拍摄图像数: %d", camera->GetTotalImageSize());
-                    ImGui::Text(u8"拍摄细胞总数: %d", camera->GetTotalCells().size());
+                    //ImGui::Text(u8"拍摄细胞总数: %d", camera->GetTotalCells().size());
                     ImGui::Separator();
                     ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
                     ImGui::Separator();
@@ -1113,7 +1156,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     //style 
                     ImGui::Separator();
                     ImGui::Text(u8"风格");
-                    static int color_idx = 0;
+                    static int color_idx = 1;
                     if (ImGui::Combo(u8"颜色", &color_idx, "Dark\0Light\0Classic\0"))
                     {
                         switch (color_idx)
@@ -1199,7 +1242,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
-        glClearColor(0.f, 0.f, 0.f, 1.0f);//设置清理的颜色，即背景颜色
+        glClearColor(0.5f, 0.5f, 0.5f, 1.0f);//设置清理的颜色，即背景颜色
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
