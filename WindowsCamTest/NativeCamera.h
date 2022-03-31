@@ -38,7 +38,7 @@ public:
 	uint32_t GetDeviceNum();
 	std::vector<CellInfo> GetFrame(bool bSave,bool bSaveAsync,const std::string inSaveName, const std::string inSaveRootPath);
 	bool SaveImages(int inId, int inSecond, const std::string inName,bool inBSave);
-	void AnalyzeImages(const std::string inSampleName, const std::string inRootPath);
+	void AnalyzeImages(const std::string inSampleName, const std::string inRootPath, bool save_cell, bool save_original_img);
 	bool SetParas(int inWidth, int inHeight, int inOffsetX,double inExposureTime, double inAcquisitionFrameRate);
 	bool StartCapture();
 	bool StopCapture();

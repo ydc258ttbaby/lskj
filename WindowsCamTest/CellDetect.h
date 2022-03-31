@@ -81,14 +81,16 @@ public:
             if (a < 300 || a>100000)
                 continue;
             RotatedRect rectPoint = minAreaRect(contours_big_img[i]);
-            if (rectPoint.center.x - width / 2 <= 0)
+            if (rectPoint.center.x - width / 2 <= 0 || rectPoint.center.x + width / 2 > img_w - 1 || rectPoint.center.y - height / 2 <= 0 || rectPoint.center.y + height / 2 > img_h - 1)
+                continue;
+            /*if (rectPoint.center.x - width / 2 <= 0)
                 rectPoint.center.x = width / 2 + 1;
             if (rectPoint.center.x + width / 2 > img_w - 1)
                 rectPoint.center.x = img_w - 1 - width / 2;
             if (rectPoint.center.y - height / 2 <= 0)
                 rectPoint.center.y = height / 2 + 1;
             if (rectPoint.center.y + height / 2 > img_h - 1)
-                rectPoint.center.y = img_h - 1 - height / 2;
+                rectPoint.center.y = img_h - 1 - height / 2;*/
 
             Centroid.push_back(rectPoint.center);
 
@@ -127,19 +129,25 @@ public:
             float cell_area = contourArea(contours_big_img[i]) * UM_2_PER_PIXEL;          //求细胞面积
 
             RotatedRect rectPoint = minAreaRect(contours_big_img[i]);
-            if (rectPoint.center.x - width / 2 <= 0)
+
+            if (rectPoint.center.x - width / 2 <= 0 || rectPoint.center.x + width / 2 > img_w - 1 || rectPoint.center.y - height / 2 <= 0 || rectPoint.center.y + height / 2 > img_h - 1)
+                continue;
+
+            /*if (rectPoint.center.x - width / 2 <= 0)
                 rectPoint.center.x = width / 2 + 1;
             if (rectPoint.center.x + width / 2 > img_w - 1)
                 rectPoint.center.x = img_w - 1 - width / 2;
             if (rectPoint.center.y - height / 2 <= 0)
                 rectPoint.center.y = height / 2 + 1;
             if (rectPoint.center.y + height / 2 > img_h - 1)
-                rectPoint.center.y = img_h - 1 - height / 2;
+                rectPoint.center.y = img_h - 1 - height / 2;*/
 
             cv::Mat roiImg = src(Rect(rectPoint.center.x - width / 2, rectPoint.center.y - height / 2, width, height));
             float cell_peri = arcLength(contours_big_img[i], true) * UM_PER_PIXEL;     //求细胞周长
-            if (cell_peri > 40.0)
+
+            if (cell_peri > 50.0 || cell_peri < 6)
                 continue;
+
             cv::Point2f center;
             float cell_dia = 0.0;
             float cell_short_axis = 0.0;

@@ -60,7 +60,7 @@ int g_para2 = 0;
 int g_para3 = 0;
 
 // global image save 
-std::string g_file_path = "E:\\Data\\CameraImages\\20220325";
+std::string g_file_path = "E:\\Data\\CameraImages\\20220330";
 bool g_b_save = false;
 bool g_b_async_save = false;
 bool g_b_preview = false;
@@ -82,7 +82,7 @@ std::vector<float> g_cell_long_array;
 std::vector<float> g_cell_vol_array;
 std::vector<float> g_cell_ell_array;
 
-float g_cell_total;
+int g_cell_total;
 float g_cell_per_second_avg = 0;
 float g_img_per_second_avg = 0;
 int g_second = 0;
@@ -195,6 +195,8 @@ float VectorAverage(const std::vector<float>& v) {
     return avg;
 }
 
+
+//拉流保存图片
 void GetImageAsync(NativeCamera* in_camera) {
     
     int id = 0;
@@ -378,27 +380,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    //筛选的参数
-    /*char set_dia_min_cstr[128] = "";
-    char set_dia_max_cstr[128] = "";
-    char set_peri_min_cstr[128] = "";
-    char set_peri_max_cstr[128] = "";
-    char set_area_min_cstr[128] = "";
-    char set_area_max_cstr[128] = "";
-    char set_vol_min_cstr[128] = "";
-    char set_vol_max_cstr[128] = "";
-    char set_ell_min_cstr[128] = "";
-    char set_ell_max_cstr[128] = "";
-    float set_dia_min = atoi(set_dia_min_cstr);
-    float set_dia_max = atoi(set_dia_max_cstr);
-    float set_peri_min = atoi(set_peri_min_cstr);
-    float set_peri_max = atoi(set_peri_max_cstr);
-    float set_area_min = atoi(set_area_min_cstr);
-    float set_aera_max = atoi(set_area_max_cstr);
-    float set_ell_min = atoi(set_ell_min_cstr);
-    float set_ell_max = atoi(set_ell_max_cstr);
-    float set_vol_min = atoi(set_vol_min_cstr);
-    float set_vol_max = atoi(set_vol_max_cstr);*/
+
     
 
     // capture state
@@ -408,6 +390,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     int volume_array[5] = { 10,20,30,50,100 };
     int volume_current = 2;
     bool b_save = false;
+    bool b_save_total_imgs = false;
     bool b_start = false;
     bool b_preview = true;
     enum Speed_Element { Element_1, Element_2, Element_3, Element_COUNT };
@@ -445,7 +428,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // load image
     GLuint tex_id_preview = 0;
     // log window
-    g_LogWindow->AddLog("hello world \n");
+    g_LogWindow->AddLog(u8"打开成功！ \n");
 
     // Native camera
     NativeCamera* camera = new NativeCamera(g_LogWindow, g_detect_class_num, g_detect_preview_num);
@@ -454,6 +437,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     //}
 
     //std::thread thread_save_img = std::thread(SaveImageAsync, camera);
+    //获取相机照片
     std::thread thread_save_img = std::thread(GetImageAsync, camera);
     thread_save_img.detach();
     //if (camera->SaveAsync()) {
@@ -472,7 +456,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // progress bar color
     ImVec4 orange_color = ImVec4(1.0, 0.43, 0.35, 1.0);
-    ImVec4 green_color = ImVec4(0.6, 1.0, 0.6, 1.0);
+    ImVec4 green_color = ImVec4(0.6, 1.0, 0.6, 0.8);
     ImVec4 progress_bar_color = orange_color;
 
     // 
@@ -619,7 +603,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 ofn.hwndOwner = NULL;
                 ofn.pszDisplayName = szFile;
                 ofn.lpszTitle = _T("Select the storage path:");
-                ofn.ulFlags = BIF_RETURNFSANCESTORS;
+                ofn.ulFlags = BIF_DONTGOBELOWDOMAIN | BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
                 LPITEMIDLIST idl = SHBrowseForFolder(&ofn);
                 if (idl != NULL)
                 {
@@ -629,6 +613,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 else {
                     //g_file_path = "E:\\Data\\CameraImages\\20220318";     //默认地址
                 }
+
+                
+
             }
             ImGui::SameLine();
             if (ImGui::Button(u8"停止", ImVec2(current_region_width * 0.5f, 40)) || camera->GetTotalImageSize() > target_img_num ) {
@@ -644,7 +631,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             else {
                 b_save = false;
             }
-            ImGui::Checkbox(u8"保存图片在：", &b_save);
+            ImGui::Checkbox(u8"保存细胞图片在：", &b_save);
+
             ImGui::SameLine();
             if (std::filesystem::exists(g_file_path)) {
                 ImGui::Text(g_file_path.c_str());
@@ -655,6 +643,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::SetTooltip(u8"Path not exists");
                 }
             }
+            ImGui::Checkbox(u8"是否保存全部图片", &b_save_total_imgs);
+
             // auto stop
             if (g_progress > 0.99 && b_start == true) {
                 g_progress = 1.0;
@@ -662,7 +652,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             }
             // analyze
             if (ImGui::Button(u8"分析", ImVec2(current_region_width * 0.5f, 30)) || (b_able_analyze && g_progress > 0.99)) {
-                std::thread thread_analyze(&NativeCamera::AnalyzeImages, camera, "1", g_file_path);
+                
+                std::thread thread_analyze(&NativeCamera::AnalyzeImages, camera, "1", g_file_path, b_save, b_save_total_imgs);
                 thread_analyze.detach();
                 b_able_analyze = false;
 
@@ -676,35 +667,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     system(("start " + std::string(g_file_path)).c_str());
                 }
             }
-            // Screen shot
-            if (ImGui::Button(u8"截图",  ImVec2(current_region_width * 0.5f, 30)) ) {
-
-                cv::Mat img(nScreenHeight, nScreenWidth, CV_8UC3);
-                glPixelStorei(GL_PACK_ALIGNMENT, (img.step & 3) ? 1 : 4);
-                glPixelStorei(GL_PACK_ROW_LENGTH, img.step / img.elemSize()); // 这句不加好像也没问题？
-                glReadPixels(0, 0, img.cols, img.rows, GL_BGR, GL_UNSIGNED_BYTE, img.data);
-                cv::Mat flipped;
-                cv::flip(img, flipped, 0);
-                std::string desktop_path = g_file_path;
-                struct tm time_info;
-                time_t raw_time;
-                time(&raw_time);
-                localtime_s(&time_info, &raw_time);
-                char time_info_buffer[100];
-                strftime(time_info_buffer, 100, "Pic_%G_%m_%d_%H%M%S_res.bmp", &time_info);
-                std::string res_path = (std::filesystem::path(desktop_path) / std::filesystem::path(std::string(time_info_buffer))).string();
-                g_LogWindow->AddLog("%s \n", res_path.c_str());
-                cv::imwrite(desktop_path + std::string(time_info_buffer), flipped);
-                if ((g_progress > 0.99 && b_screenshot)) {
-                    b_screenshot = false;
-                }
-            }
+            
             // clear plot
-            ImGui::SameLine();
-            if (ImGui::Button(u8"清理", ImVec2(current_region_width * 0.5f, 30))) {
+         
+            if (ImGui::Button(u8"清空", ImVec2(current_region_width * 0.5f, 30))) {
                 g_progress = 0.0;
                 ClearPlot();
-            }
+                //清理照片
+                for (int i = 0; i < g_detect_tex_ids.size(); i++) {
+                    for (int j = 0; j < g_detect_tex_ids[0].size(); j++) {
+                        glDeleteTextures(1, &(g_detect_tex_ids[i][j]));
+                        g_detect_tex_ids[i][j] = 0;
+                    }
+                }
+                //清空数据
+                camera->Clear();
+                g_LogWindow->AddLog(u8"清空成功! \n");
+                }
 
             
             ImGui::End();
@@ -717,36 +696,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             ImGui::Image((void*)(intptr_t)tex_id_preview, ImVec2(atoi(img_width_cstr), atoi(img_height_cstr)));
             ImGui::End();
         }
+
         //ImPlot::ShowDemoWindow();
 
         // statis window
 
-        {   /*ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(1.0f, 1.0f, 1.0f, 0.9f));
-            ImGui::PushStyleColor(ImPlotCol_PlotBg, ImVec4(0.42f, 0.57f, 1.00f, 0.13f));
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1.00f, 1.00f, 1.00f, 0.0f));
-            ImGui::PushStyleColor(ImPlotCol_PlotBorder, ImVec4(0.00f, 0.00f, 0.00f, 0.00f)); 
-            ImGui::PushStyleColor(ImPlotCol_LegendBg, ImVec4(1.00f, 1.00f, 1.00f, 0.0f));
-            ImGui::PushStyleColor(ImPlotCol_LegendBorder,ImVec4(0.82f, 0.82f, 0.82f, 1.00f));
-            ImGui::PushStyleColor(ImPlotCol_LegendText,ImVec4(0.00f, 0.00f, 0.00f, 1.00f));
-            ImGui::PushStyleColor(ImPlotCol_InlayText,ImVec4(0.00f, 0.00f, 0.00f, 0.00f));
-            ImGui::PushStyleColor(ImPlotCol_AxisText,ImVec4(1.00f, 1.00f, 1.00f, 0.00f));
-            ImGui::PushStyleColor(ImPlotCol_AxisGrid,ImVec4(0.00f, 0.00f, 0.00f, 0.50f));
-            ImGui::PushStyleColor(ImPlotCol_AxisTick,ImVec4(1.00f, 1.00f, 1.00f, 0.0f));*/
-
-            
-           /* colors[ImPlotCol_PlotBorder] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-            colors[ImPlotCol_LegendBg] = ImVec4(1.00f, 1.00f, 1.00f, 0.98f);
-            colors[ImPlotCol_LegendBorder] = ImVec4(0.82f, 0.82f, 0.82f, 0.80f);
-            colors[ImPlotCol_LegendText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-            colors[ImPlotCol_TitleText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-            colors[ImPlotCol_InlayText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-            colors[ImPlotCol_AxisText] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-            colors[ImPlotCol_AxisGrid] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-            colors[ImPlotCol_AxisTick] = ImVec4(0.00f, 0.00f, 0.00f, 0.25f);*/
-            
+        {              
 
             ImGui::Begin("Statis", NULL, window_flags);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+            
+
+            
             // plot data prepare
+
 
             //std::lock_guard<std::mutex> guard(g_img_plot_mutex);
             std::vector<float> cell_per_second_avg_list(g_second_array.size(), g_cell_per_second_avg);
@@ -757,13 +719,47 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             static float cratios[] = { 1,1,1 };
             static int xybins[2] = { 90,30 };
             ImGui::SliderInt2("Bins", xybins, 1, 200);
+            ImGui::SameLine();
+            // Screen shot
+            if (ImGui::Button(u8"截图保存", ImVec2(100, 30))) {
+
+                ImVec2 StatisPos = ImGui::GetWindowPos();        //获取图像窗口位置及大小
+                float Statis_width = ImGui::GetWindowWidth();
+                float Statis_height = ImGui::GetWindowHeight();
+
+
+                //cv::Mat img(nScreenHeight, nScreenWidth, CV_8UC3);
+                cv::Mat img(Statis_height-60, Statis_width, CV_8UC3);    //去掉窗口最上面一行约60
+
+
+                glPixelStorei(GL_PACK_ALIGNMENT, (img.step & 3) ? 1 : 4);
+                //glPixelStorei(GL_PACK_ROW_LENGTH, img.step / img.elemSize()); // 这句不加好像也没问题？
+                glReadPixels(StatisPos.x, nScreenHeight- StatisPos.y- Statis_height, img.cols, img.rows, GL_BGR, GL_UNSIGNED_BYTE, img.data);
+                
+                cv::Mat flipped;
+                cv::flip(img, flipped, 0);
+                std::string desktop_path = g_file_path;
+                struct tm time_info;
+                time_t raw_time;
+                time(&raw_time);
+                localtime_s(&time_info, &raw_time);
+                char time_info_buffer[100];
+                strftime(time_info_buffer, 100, "Pic_%G_%m_%d_%H%M%S_res.bmp", &time_info);
+                std::string res_path = (std::filesystem::path(desktop_path) / std::filesystem::path(std::string(time_info_buffer))).string();
+                g_LogWindow->AddLog("保存： %s \n", res_path.c_str());
+                cv::imwrite(res_path, flipped);
+                /*if ((g_progress > 0.99 && b_screenshot)) {
+                    b_screenshot = false;
+                }*/
+            }
+
 
             if (ImPlot::BeginSubplots("My Subplots", 3, 3, ImVec2(-1, -1), flags, rratios, cratios)) {
 
                 ImPlot::PushColormap("Greys");
                 if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"直径(um)", u8"周长(um)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::PlotHistogram2D("", g_cell_dia_array.data(), g_cell_peri_array.data(), g_cell_dia_array.size(), xybins[0], xybins[1],  false, ImPlotRect(0, 10, 0, 10));
+                    ImPlot::PlotHistogram2D("", g_cell_dia_array.data(), g_cell_peri_array.data(), g_cell_dia_array.size(), xybins[0], xybins[1],  false, ImPlotRect(0, 0, 0,0));
                     ImPlot::EndPlot();
                 }
                 if (ImPlot::BeginPlot("")) {
@@ -823,7 +819,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                             g_detect_tex_ids[i][j] = 0;
                         }
                     }
+                    
+                    //传入形态学参数到数组
+
                     std::vector<CellInfo> total_cells = camera->GetTotalCells();
+                    g_cell_total = total_cells.size();
+                    
                     for (int i = 0; i < total_cells.size(); i++) {
                         g_cell_dia_array.push_back(total_cells[i].m_diameter);
                         g_cell_area_array.push_back(total_cells[i].m_area);
@@ -841,24 +842,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                             LoadTextureFromImage(GrayToRGB(total_cells[i].m_image), &(g_detect_tex_ids.at(x).at(y)));
                         }
                     }
-                    //std::sort(g_cell_dia_array.begin(), g_cell_dia_array.end());
-                    //std::sort(g_cell_area_array.begin(), g_cell_area_array.end());
-                    //std::sort(g_cell_peri_array.begin(), g_cell_peri_array.end());
-                    //std::sort(g_cell_short_array.begin(), g_cell_short_array.end());
-                    //std::sort(g_cell_long_array.begin(), g_cell_long_array.end());
-                    //std::sort(g_cell_vol_array.begin(), g_cell_vol_array.end());
-                    //std::sort(g_cell_ell_array.begin(), g_cell_ell_array.end());
+                    
                 }
 
-
-                /*ImGui::PlotLines("Frame Times", arr, IM_ARRAYSIZE(arr));*/
-                /*ImGui::PlotHistogram("Histogram", arr, IM_ARRAYSIZE(arr), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80.0f));*/
                 ImPlot::EndSubplots();
             }
-                //ImGui::PlotHistogram("Histogram", g_cell_ell_array.data(), g_cell_ell_array.size(), 0, NULL, FLT_MAX, FLT_MAX, ImVec2(0, 80));
-                //ImGui::PlotHistogram("Histogram", g_cell_dia_array.data(), g_cell_dia_array.size(), 0, NULL, FLT_MAX, FLT_MAX, ImVec2(0, 80));
-                //ImGui::PlotHistogram("Histogram", g_cell_peri_array.data(), g_cell_peri_array.size(), 0, NULL, FLT_MAX, FLT_MAX, ImVec2(0, 80));
-                //ImPlot::PlotHistogram("", g_cell_dia_array.data(), g_cell_dia_array.size(), 50);
+               
 
             ImGui::End();
             //ImGui::PopStyleColor(11);
@@ -895,15 +884,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             m_condition.m_max = set_max;
             m_condition.m_b_and = g_logic;
 
-            if (ImGui::Button(u8"确认", ImVec2(90, 25))) {
+            if (ImGui::Button(u8"确认添加", ImVec2(90, 25))) {
                 g_conditions.push_back(m_condition);
+                g_LogWindow->AddLog("条件添加成功！\n");
             }
             ImGui::SameLine();
             if (ImGui::Button(u8"清空条件", ImVec2(90, 25))) {
                 ClearVector(g_conditions);
+                g_LogWindow->AddLog("条件清空成功！\n");
             }
-
-
 
         }
 
@@ -920,7 +909,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 ofn.hwndOwner = NULL;
                 ofn.pszDisplayName = szFile;
                 ofn.lpszTitle = _T("选择文件夹:");
-                ofn.ulFlags = BIF_RETURNFSANCESTORS;
+                ofn.ulFlags = BIF_DONTGOBELOWDOMAIN | BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE; //包含新建文件夹功能
                 LPITEMIDLIST idl = SHBrowseForFolder(&ofn);
                 if (idl != NULL)
                 {
@@ -994,6 +983,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         LoadTextureFromImage(GrayToRGB(cell_infos[i].m_image), &(g_detect_tex_ids.at(x).at(y)));
                     }
                     filter_cell_num++;
+                    //保存筛选图片
                     if (g_set_filter_store) {
                         std::string save_filter_cell_path = (std::filesystem::path(g_img_filter_path)/std::filesystem::path(cell_infos[i].m_name)).string();
                         cv::imwrite(save_filter_cell_path.c_str(),cell_infos[i].m_image);
@@ -1041,6 +1031,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 }
                 ImGui::NewLine();
             }
+
             ImGui::Separator();
             std::string btn_text = u8"打开筛选细胞图，一共" + std::to_string(g_filter_cellinfos.size()) + u8"个";
             if (ImGui::Button(btn_text.c_str())) {
@@ -1090,7 +1081,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::Text("g b save %d", g_b_save);
                     ImGui::Text("b save %d", b_save);
                     ImGui::Text(u8"拍摄图像数: %d", camera->GetTotalImageSize());
-                    //ImGui::Text(u8"拍摄细胞总数: %d", camera->GetTotalCells().size());
+                    ImGui::Text(u8"拍摄细胞总数: %d", g_cell_total);
                     ImGui::Separator();
                     ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
                     ImGui::Separator();
@@ -1242,7 +1233,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
-        glClearColor(0.5f, 0.5f, 0.5f, 1.0f);//设置清理的颜色，即背景颜色
+        glClearColor(0.5f, 0.5f, 0.5f, 1.0f);              //设置清理的颜色，即背景颜色
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);

@@ -408,7 +408,7 @@ bool NativeCamera::SaveImages(int inId, int inSecond, const std::string inName, 
 
 }
 
-void NativeCamera::AnalyzeImages(const std::string inSampleName, const std::string inRootPath) {
+void NativeCamera::AnalyzeImages(const std::string inSampleName, const std::string inRootPath, bool save_cell, bool save_original_img) {
 	m_total_cells.reserve(10000);
 	int cell_id = 0;
 	std::vector<CellInfo> cellInfos;
@@ -419,26 +419,35 @@ void NativeCamera::AnalyzeImages(const std::string inSampleName, const std::stri
 			CellInfo cell_info = cellInfos[j];
 			cell_info.m_second = m_total_images[i].m_second;
 			cell_info.m_id = cell_id;
-			cell_info.m_class = Classify(cell_info.m_diameter);
+			//cell_info.m_class = Classify(cell_info.m_diameter);
+			cell_info.m_class = 0;
 			cell_info.m_name = inSampleName + "_" + std::to_string(cell_id) + "_" + std::to_string(cell_info.m_class) + "_" + m_total_images[i].m_name + ".bmp";
 			m_total_cells.push_back(cell_info);
 			cell_id++;
 
 			std::filesystem::path root_path = std::filesystem::path(inRootPath)/std::filesystem::path(std::to_string(cell_info.m_class));
+			//std::filesystem::path root_path = std::filesystem::path(inRootPath);
 			if (!std::filesystem::exists(root_path)) {
 				std::filesystem::create_directories(root_path);
 			}
 			std::filesystem::path save_path = root_path /std::filesystem::path(cell_info.m_name);
 			cell_info.m_path = save_path.string();
 			//m_log_window->AddLog("save img in %s \n", save_path.string().c_str());
-			cv::imwrite(save_path.string(),cell_info.m_image);
+			if (save_cell) {
+				cv::imwrite(save_path.string(), cell_info.m_image);
+			}
+			
 		}
-		//std::filesystem::path root_path = std::filesystem::path(inRootPath) / std::filesystem::path(std::to_string("raw"));
-		//if (!std::filesystem::exists(root_path)) {
-		//	std::filesystem::create_directories(root_path);
-		//}
-		//std::filesystem::path save_path = root_path / std::filesystem::path(m_total_images[i].m_name + std::to_string(i) + ".bmp");
-		//cv::imwrite(save_path.string(), m_total_images[i].m_image);
+
+		if(save_original_img)
+		{ 
+			std::filesystem::path img_root_path = std::filesystem::path(inRootPath) / std::filesystem::path(std::string("raw"));
+			if (!std::filesystem::exists(img_root_path)) {
+				std::filesystem::create_directories(img_root_path);
+			}
+			std::filesystem::path save_path = img_root_path / std::filesystem::path(m_total_images[i].m_name + std::to_string(i) + ".bmp");
+			cv::imwrite(save_path.string(), m_total_images[i].m_image);
+			}
 	}
 	std::vector<ImageInfo> temp;
 	m_total_images.swap(temp);
