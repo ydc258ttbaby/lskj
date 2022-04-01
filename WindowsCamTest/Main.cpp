@@ -81,8 +81,10 @@ std::vector<float> g_cell_short_array;
 std::vector<float> g_cell_long_array;
 std::vector<float> g_cell_vol_array;
 std::vector<float> g_cell_ell_array;
+std::vector<float> g_cell_round_array;
 
 int g_cell_total;
+int g_img_total;
 float g_cell_per_second_avg = 0;
 float g_img_per_second_avg = 0;
 int g_second = 0;
@@ -120,10 +122,11 @@ std::string g_img_filter_path = "";
 
 int g_cell_filter = 0;
 
-std::vector<std::string> g_condition_names = {u8"直径",u8"面积",u8"周长",u8"体积",u8"偏心率"};
+std::vector<std::string> g_condition_names = {u8"直径",u8"面积",u8"周长",u8"体积",u8"偏心率",u8"圆度" };
 int g_property_int = 0;
 int g_logic = 0;
 std::vector<CellInfo> g_filter_cellinfos;
+std::vector<CellInfo> g_show_cellinfos;
 
 std::vector<Condition> g_conditions;
 
@@ -179,8 +182,12 @@ void ClearPlot() {
     ClearVector(g_cell_long_array);
     ClearVector(g_cell_vol_array);
     ClearVector(g_cell_ell_array);
+    ClearVector(g_cell_round_array);
+    ClearVector(g_show_cellinfos);
+    ClearVector(g_filter_cellinfos);
     g_second = 0;
     g_cell_total = 0;
+    g_img_total = 0;
     g_cell_per_second_avg = 0;
     g_img_per_second_avg = 0;
     g_img_per_second = 0;
@@ -297,6 +304,7 @@ bool LoadTextureFromImage(cv::Mat in_image, GLuint* out_texture)
 
 //
 string unicode2string(LPCWSTR lps) {
+
     int len = WideCharToMultiByte(CP_ACP, 0, lps, -1, NULL, 0, NULL, NULL);
     if (len <= 0) {
         return "";
@@ -310,6 +318,11 @@ string unicode2string(LPCWSTR lps) {
         return str;
     }
 }
+//
+//void Tchar2Char(const TCHAR* tchar, char* _char)
+//{
+//    int 
+//}
 
 static void GlfwErrorCallback(int in_error, const char* in_description)
 {
@@ -412,10 +425,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 
 
-    enum Info_Item { Item_et, Item_ev, Item_ci, Item_cc, Item_tv, Item_s, Item_px, Item_py, Item_count };
+    enum Info_Item {Item_ci, Item_cc, Item_tv, Item_s, Item_px, Item_py, Item_count };
     std::vector<std::tuple<std::string, float, std::string> > info_v = {
-    std::make_tuple(u8"流过时间",0.0,"s"),
-    std::make_tuple(u8"流过体积",0.0,"uL"),
     std::make_tuple(u8"已采集图像",0.0,""),
     std::make_tuple(u8"已采集细胞",0.0,""),
     std::make_tuple(u8"总体积",0.0,"uL"),
@@ -487,23 +498,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             bool ret = LoadTextureFromImage(GrayToRGB(image_temp), &tex_id_preview);
         }
         image_temp.release();
-        // load detect image 
-        //for (int i = 0; i < g_detect_class_num; i++) {
-        //    std::vector<cv::Mat> temp_images = camera->OperateDetectImageQueue(cv::Mat(), false, i);
-        //    for (int j = 0; j < temp_images.size(); j++) {
-        //        cv::Mat detect_img = GrayToRGB(temp_images[j]);
-        //        if (!detect_img.empty()) {
-        //            LoadTextureFromImage(detect_img, &(g_detect_tex_ids[i][j]));
-        //        }
-        //    }
-        //}
+
 
         //std::cout << "camera num" << camera->GetDeviceNum() << std::endl;
+        g_img_total = camera->GetTotalImageSize();
+        std::get<1>(info_v[Item_ci]) = g_img_total;
+        std::get<1>(info_v[Item_cc]) = g_cell_total;
         std::get<1>(info_v[Item_tv]) = volume_array[volume_current];
         std::get<1>(info_v[Item_s]) = speed_array[speed_current_elem];
         std::get<1>(info_v[Item_py]) = int(pos_selected / 8) + 1;
         std::get<1>(info_v[Item_px]) = pos_selected % 8 + 1;
-        std::get<1>(info_v[Item_ci]) = 0;
 
 
         glfwPollEvents();
@@ -746,7 +750,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 char time_info_buffer[100];
                 strftime(time_info_buffer, 100, "Pic_%G_%m_%d_%H%M%S_res.bmp", &time_info);
                 std::string res_path = (std::filesystem::path(desktop_path) / std::filesystem::path(std::string(time_info_buffer))).string();
-                g_LogWindow->AddLog("保存： %s \n", res_path.c_str());
+                g_LogWindow->AddLog(u8"保存： %s \n", res_path.c_str());
                 cv::imwrite(res_path, flipped);
                 /*if ((g_progress > 0.99 && b_screenshot)) {
                     b_screenshot = false;
@@ -756,10 +760,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             if (ImPlot::BeginSubplots("My Subplots", 3, 3, ImVec2(-1, -1), flags, rratios, cratios)) {
 
-                ImPlot::PushColormap("Greys");
+                ImPlot::PushColormap("Hot");
                 if (ImPlot::BeginPlot("")) {
-                    ImPlot::SetupAxes(u8"直径(um)", u8"周长(um)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-                    ImPlot::PlotHistogram2D("", g_cell_dia_array.data(), g_cell_peri_array.data(), g_cell_dia_array.size(), xybins[0], xybins[1],  false, ImPlotRect(0, 0, 0,0));
+                    ImPlot::SetupAxes(u8"直径(um)", u8"圆度(um)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::PlotHistogram2D("", g_cell_dia_array.data(), g_cell_round_array.data(), g_cell_dia_array.size(), xybins[0], xybins[1],  false, ImPlotRect(0, 0, 0,0));
                     ImPlot::EndPlot();
                 }
                 if (ImPlot::BeginPlot("")) {
@@ -805,11 +809,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImPlot::EndPlot();
                 }
                 if (ImPlot::BeginPlot("")) {
+                    ImPlot::SetupAxes(u8"圆度", u8"数量", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+                    ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
+                    ImPlot::PlotHistogram("", g_cell_round_array.data(), g_cell_round_array.size(), 50);
+                    ImPlot::EndPlot();
+                }
+
+                /*if (ImPlot::BeginPlot("")) {
                     ImPlot::SetupAxes(u8"时间(s)", NULL, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
                     ImPlot::SetupLegend(ImPlotLocation_SouthEast, ImPlotLegendFlags_None);
                     ImPlot::PlotLine(u8"图像每秒", g_second_array.data(), g_img_per_second_array.data(), g_second_array.size());
                     ImPlot::EndPlot();
-                }
+                }*/
 
                 if (camera->GetTotalImageSize() == 0 && g_cell_dia_array.size() == 0) {
                     // clear display tex id 
@@ -833,14 +844,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         g_cell_long_array.push_back(total_cells[i].m_longaxis);
                         g_cell_vol_array.push_back(total_cells[i].m_vol);
                         g_cell_ell_array.push_back(total_cells[i].m_eccentricity);
-
+                        g_cell_round_array.push_back(total_cells[i].m_roundness);
                         if (i > 5000) break;
                         // display total cells image 
                         if (i < g_detect_class_num * g_detect_preview_num) {
                             int y = i % g_detect_preview_num;
                             int x = i / g_detect_preview_num;
-                            LoadTextureFromImage(GrayToRGB(total_cells[i].m_image), &(g_detect_tex_ids.at(x).at(y)));
+                            g_show_cellinfos.push_back(total_cells[i]);
+                            LoadTextureFromImage(GrayToRGB(g_show_cellinfos[i].m_image), &(g_detect_tex_ids.at(x).at(y)));
                         }
+
                     }
                     
                 }
@@ -870,7 +883,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             float c_max;
 
             
-            ImGui::Combo(u8"条件选择", &g_property_int, u8"直径\0面积\0周长\0体积\0偏心率\0");
+            ImGui::Combo(u8"条件选择", &g_property_int, u8"直径\0面积\0周长\0体积\0偏心率\0圆度\0");
             m_condition.m_property = (Enum_property)g_property_int;
 
             static float set_min = 0.001f;
@@ -886,12 +899,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             if (ImGui::Button(u8"确认添加", ImVec2(90, 25))) {
                 g_conditions.push_back(m_condition);
-                g_LogWindow->AddLog("条件添加成功！\n");
+                g_LogWindow->AddLog(u8"条件添加成功！\n");
             }
             ImGui::SameLine();
             if (ImGui::Button(u8"清空条件", ImVec2(90, 25))) {
                 ClearVector(g_conditions);
-                g_LogWindow->AddLog("条件清空成功！\n");
+                g_LogWindow->AddLog(u8"条件清空成功！\n");
             }
 
         }
@@ -927,6 +940,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         // 执行筛选函数
         if (ImGui::Button(u8"执行筛选", ImVec2(150, 40))) {
             ClearVector(g_filter_cellinfos);
+            ClearVector(g_show_cellinfos);
             for (int i = 0; i < g_detect_tex_ids.size(); i++) {
                 for (int j = 0; j < g_detect_tex_ids[0].size(); j++) {
                     glDeleteTextures(1, &(g_detect_tex_ids[i][j]));
@@ -957,6 +971,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         case Enum_property::Enum_eccentricity:
                             b_cell_filter_single = (cell_infos[i].m_eccentricity >= g_conditions[j].m_min && cell_infos[i].m_eccentricity <= g_conditions[j].m_max);
                             break;
+                        case Enum_property::Enum_roundness:
+                            b_cell_filter_single = (cell_infos[i].m_roundness >= g_conditions[j].m_min && cell_infos[i].m_roundness <= g_conditions[j].m_max);
+                            break;
+
                     }
                     if (j == 0) {
                         if (g_conditions[j].m_b_and == 0) {
@@ -1013,20 +1031,30 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::Separator();
                 }
             }
+            //添加属性值
             for (int i = 0; i < g_detect_class_num; i++) {
-                //std::string btn_text = u8"类别 " + std::to_string(i);
-                //if (ImGui::Button(btn_text.c_str(), ImVec2(100, 100))) {
-                //    std::string path = g_file_path + "\\" + std::to_string(i);
-                //    if (std::filesystem::exists(std::filesystem::path(path))) {
-                //        system(("start " + std::string(path)).c_str());
-                //    }
-                //    else {
-                //        g_LogWindow->AddLog("file : %s not exists !! \n", path.c_str());
-                //    }
-                //}
-                //ImGui::SameLine();
                 for (int j = 0; j < g_detect_preview_num; j++) {
                     ImGui::Image((void*)(intptr_t)g_detect_tex_ids[i][j], ImVec2(g_detect_img_width, g_detect_img_height));
+
+                    if (g_show_cellinfos.size() != 0 && g_filter_cellinfos.size() ==0) {
+                        if (i * g_detect_preview_num + j < g_show_cellinfos.size()) {
+                            if (ImGui::IsItemHovered()) {
+                                char tip_buffer[100];
+                                sprintf(tip_buffer, u8"直径: %.3f \n面积: %.3f \n周长: %.3f\n体积：%.3f\n偏心率： %.3f \n圆度：%.3f \n", g_show_cellinfos[i * g_detect_preview_num + j].m_diameter, g_show_cellinfos[i * g_detect_preview_num + j].m_perimeter, g_show_cellinfos[i * g_detect_preview_num + j].m_area, g_show_cellinfos[i * g_detect_preview_num + j].m_vol, g_show_cellinfos[i * g_detect_preview_num + j].m_eccentricity, g_show_cellinfos[i * g_detect_preview_num + j].m_roundness);
+                                ImGui::SetTooltip(tip_buffer);
+                            }
+                        }
+                    }
+                    
+
+                    else if (i * g_detect_preview_num + j < g_filter_cellinfos.size()) {
+                        if (ImGui::IsItemHovered()) {
+                            char tip_buffer[100];
+                            sprintf(tip_buffer, u8"直径: %.3f \n面积: %.3f \n周长: %.3f\n体积：%.3f\n偏心率： %.3f \n圆度：%.3f \n", g_filter_cellinfos[i * g_detect_preview_num + j].m_diameter, g_filter_cellinfos[i * g_detect_preview_num + j].m_perimeter, g_filter_cellinfos[i * g_detect_preview_num + j].m_area, g_filter_cellinfos[i * g_detect_preview_num + j].m_vol, g_filter_cellinfos[i * g_detect_preview_num + j].m_eccentricity, g_filter_cellinfos[i * g_detect_preview_num + j].m_roundness);
+                            ImGui::SetTooltip(tip_buffer);
+                        }
+                    }
+                    
                     ImGui::SameLine();
                 }
                 ImGui::NewLine();
@@ -1080,8 +1108,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::Text("b start %d", b_start);
                     ImGui::Text("g b save %d", g_b_save);
                     ImGui::Text("b save %d", b_save);
-                    ImGui::Text(u8"拍摄图像数: %d", camera->GetTotalImageSize());
-                    ImGui::Text(u8"拍摄细胞总数: %d", g_cell_total);
+                    //ImGui::Text(u8"fps: %d", g_img_per_second);
                     ImGui::Separator();
                     ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
                     ImGui::Separator();
@@ -1210,7 +1237,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         }
                     }
                         
-                        //ImGui::ShowDemoWindow();
+                 //ImGui::ShowDemoWindow();
                     
                     if (ImGui::Button("open file")) {
                         if (std::filesystem::exists(std::filesystem::path(g_file_path))) {

@@ -360,7 +360,8 @@ struct ImPlotColormapData {
             // ImU32 last = keys[0];
             // Tables.push_back(last);
             // int n = 1;
-            for (int i = 0; i < key_count-1; ++i) {
+            //for (int i = 0; i < key_count-1; ++i) {
+            for (int i = key_count - 1; i >=0 ; --i) {
                 for (int s = 0; s < 255; ++s) {
                     ImU32 a = keys[i];
                     ImU32 b = keys[i+1];

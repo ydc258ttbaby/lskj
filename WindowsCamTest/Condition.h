@@ -5,7 +5,8 @@ enum Enum_property {
 	Enum_area,
 	Enum_perimeter,
 	Enum_volume,
-	Enum_eccentricity
+	Enum_eccentricity,
+	Enum_roundness
 };
 
 struct Condition
