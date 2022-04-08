@@ -318,16 +318,21 @@ string unicode2string(LPCWSTR lps) {
         return str;
     }
 }
-//
-//void Tchar2Char(const TCHAR* tchar, char* _char)
-//{
-//    int 
-//}
+
+void Tchar2Char(const TCHAR* tchar, char* _char)
+{
+    int iLength;
+    iLength = WideCharToMultiByte(CP_ACP,0,tchar,-1,NULL,0,NULL,NULL);
+    WideCharToMultiByte(CP_ACP,0,tchar,-1,_char,iLength,NULL,NULL);
+}
+
+
 
 static void GlfwErrorCallback(int in_error, const char* in_description)
 {
     fprintf(stderr, "Glfw Error %d: %s\n", in_error, in_description);
 }
+
 cv::Mat GrayToRGB(cv::Mat in_gray_image) {
     cv::Mat channels[3];
     channels[0] = in_gray_image;
@@ -647,7 +652,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     ImGui::SetTooltip(u8"Path not exists");
                 }
             }
-            ImGui::Checkbox(u8"是否保存全部图片", &b_save_total_imgs);
+            //ImGui::Checkbox(u8"是否保存全部图片", &b_save_total_imgs);
 
             // auto stop
             if (g_progress > 0.99 && b_start == true) {
@@ -703,11 +708,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
         //ImPlot::ShowDemoWindow();
 
-        // statis window
+        // plot window
 
         {              
 
-            ImGui::Begin("Statis", NULL, window_flags);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+            ImGui::Begin("Plot", NULL, window_flags);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
             
 
             
@@ -719,10 +724,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             std::vector<float> img_per_second_avg_list(g_second_array.size(), g_img_per_second_avg);
             // begin plot
             static ImPlotSubplotFlags flags = ImPlotSubplotFlags_NoTitle;
-            static float rratios[] = { 1,1 };
-            static float cratios[] = { 1,1,1 };
+            static float rratios[] = { 1,1,1};
+            static float cratios[] = { 1,1,1};
             static int xybins[2] = { 90,30 };
-            ImGui::SliderInt2("Bins", xybins, 1, 200);
+            ImGui::SliderInt2("Bins", xybins, 1, 200);  //滑动条
             ImGui::SameLine();
             // Screen shot
             if (ImGui::Button(u8"截图保存", ImVec2(100, 30))) {
@@ -927,6 +932,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 if (idl != NULL)
                 {
                     SHGetPathFromIDList(idl, szFile);
+                    /*CHAR szFile_char[MAX_PATH];
+                    Tchar2Char(szFile,szFile_char);*/
                     g_img_filter_path = unicode2string(szFile);
                 }
 
@@ -1022,7 +1029,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 std::string bottonname = std::to_string(g_conditions[i].m_min)+"<"+ g_condition_names.at(g_conditions[i].m_property) + "<"+ std::to_string(g_conditions[i].m_max);
                 if (ImGui::Button(bottonname.c_str()))
                 {
-
+                    g_conditions.erase(g_conditions.begin()+i);
+                    g_LogWindow->AddLog(u8"删除条件：%s\n", bottonname.c_str());
                 }
                 if (i < g_conditions.size() - 1) {
                     ImGui::SameLine();
