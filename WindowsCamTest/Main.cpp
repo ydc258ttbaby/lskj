@@ -1,6 +1,6 @@
 ﻿// WindowsCamTest.cpp : 定义应用程序的入口点。
 //
-#define NO_WIN32_LEAN_AND_MEAN
+//#define NO_WIN32_LEAN_AND_MEAN
 #include "framework.h"
 #include "Main.h"
 #include "FlowCam\IInterface.h"
@@ -349,26 +349,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 {
     // Flow init
     FlowInit();
-
     // open console
-    AllocConsole();
+/*    AllocConsole();
     HANDLE  g_hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     freopen("CONIN$", "r", stdin);
     freopen("CONOUT$", "w", stdout);
-    freopen("CONOUT$", "w", stderr);
+    freopen("CONOUT$", "w", stderr);*/
 
-    // glfw init
+    //// glfw init
     glfwSetErrorCallback(GlfwErrorCallback);
     if (!glfwInit())
         return 1;
 
-    // opengl version
+    //// opengl version
     const char* glsl_version = "#version 330";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // create window
+    //// create window
     int nScreenWidth = GetSystemMetrics(SM_CXSCREEN);
     int nScreenHeight = GetSystemMetrics(SM_CYSCREEN);
     GLFWwindow* window = glfwCreateWindow(nScreenWidth, nScreenHeight, "LSKJ-VS1000", NULL, NULL);
@@ -376,13 +375,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         return 1;
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
-    // glad bind to window
+    //// glad bind to window
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
-    // Setup ImGui context
+    //// Setup ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImPlot::CreateContext();
@@ -479,7 +478,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     int target_img_num = 6000;
     bool b_able_analyze = true;
 
-    // Main loop
+    //// Main loop
     while (!glfwWindowShouldClose(window))
     {
 

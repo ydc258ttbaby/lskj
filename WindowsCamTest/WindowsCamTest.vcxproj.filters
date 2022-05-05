@@ -105,6 +105,9 @@
     <Image Include="WindowsCamTest.ico">
       <Filter>资源文件</Filter>
     </Image>
+    <Image Include="C:\Users\admin\Desktop\mofis.ico">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="implot-master\LICENSE" />
